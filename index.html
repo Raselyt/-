@@ -13,6 +13,10 @@
             background-color: #f8fafc;
         }
     </style>
+    <!-- Shim for process.env to prevent white screen on Vercel -->
+    <script>
+      window.process = { env: { API_KEY: "" } };
+    </script>
 <script type="importmap">
 {
   "imports": {
@@ -26,5 +30,7 @@
 </head>
 <body>
     <div id="root"></div>
+    <!-- Load the main entry point -->
+    <script type="module" src="./index.tsx"></script>
 </body>
 </html>
