@@ -1,0 +1,7 @@
+{
+  "name": "Remittance Ledger Pro - Italy to BD",
+  "description": "A professional remittance and currency business accounting tool for Italy-to-Bangladesh Bkash businesses, featuring AI-powered ledger entry and profit tracking.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
