@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { User } from '../types';
+import { supabase } from '../services/supabase';
 
 interface AuthProps {
   onLogin: (user: User) => void;
@@ -11,76 +12,76 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Clear error when switching tabs
   useEffect(() => {
     setError('');
   }, [isLoginTab]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setIsLoading(true);
 
     if (!email.trim() || !password.trim()) {
       setError('দয়া করে ইমেইল এবং পাসওয়ার্ড সঠিকভাবে দিন।');
+      setIsLoading(false);
       return;
     }
 
-    const savedUsersStr = localStorage.getItem('rlp_users') || '[]';
-    const users: (User & { password?: string })[] = JSON.parse(savedUsersStr);
+    try {
+      if (isLoginTab) {
+        const { data, error: authError } = await supabase.auth.signInWithPassword({
+          email: email.toLowerCase().trim(),
+          password: password,
+        });
 
-    if (isLoginTab) {
-      // Login Logic
-      const user = users.find(u => u.email.toLowerCase() === email.toLowerCase().trim() && u.password === password);
-      if (user) {
-        // Successful login
-        onLogin({ id: user.id, email: user.email });
+        if (authError) throw authError;
+        if (data.user) {
+          onLogin({ id: data.user.id, email: data.user.email! });
+        }
       } else {
-        const emailExists = users.some(u => u.email.toLowerCase() === email.toLowerCase().trim());
-        if (emailExists) {
-          setError('ভুল পাসওয়ার্ড! আবার চেষ্টা করুন।');
-        } else {
-          setError('এই ইমেইলে কোনো অ্যাকাউন্ট পাওয়া যায়নি। প্রথমে "নতুন একাউন্ট" ট্যাব থেকে একাউন্ট খুলুন।');
+        if (password.length < 6) {
+          setError('পাসওয়ার্ড অন্তত ৬ অক্ষরের হতে হবে।');
+          setIsLoading(false);
+          return;
+        }
+
+        const { data, error: authError } = await supabase.auth.signUp({
+          email: email.toLowerCase().trim(),
+          password: password,
+        });
+
+        if (authError) throw authError;
+        if (data.user) {
+          // Initialize profile for new user
+          await supabase.from('profiles').insert([{ id: data.user.id, opening_bdt: 0 }]);
+          onLogin({ id: data.user.id, email: data.user.email! });
         }
       }
-    } else {
-      // Signup Logic
-      if (users.find(u => u.email.toLowerCase() === email.toLowerCase().trim())) {
-        setError('এই ইমেইল দিয়ে ইতিপূর্বে অ্যাকাউন্ট খোলা হয়েছে। লগইন করার চেষ্টা করুন।');
-        return;
+    } catch (err: any) {
+      console.error(err);
+      if (err.message.includes('Invalid login credentials')) {
+        setError('ভুল ইমেইল বা পাসওয়ার্ড! আবার চেষ্টা করুন।');
+      } else if (err.message.includes('User already registered')) {
+        setError('এই ইমেইল দিয়ে ইতিপূর্বে অ্যাকাউন্ট খোলা হয়েছে।');
+      } else {
+        setError('সার্ভারে সমস্যা হয়েছে: ' + err.message);
       }
-      
-      if (password.length < 4) {
-        setError('পাসওয়ার্ড অন্তত ৪ অক্ষরের হতে হবে।');
-        return;
-      }
-
-      const newUser = { 
-        id: crypto.randomUUID(), 
-        email: email.toLowerCase().trim(), 
-        password: password 
-      };
-      
-      users.push(newUser);
-      localStorage.setItem('rlp_users', JSON.stringify(users));
-      
-      // Auto login after signup
-      onLogin({ id: newUser.id, email: newUser.email });
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
     <div className="min-h-screen bg-[#F8FAFF] flex flex-col items-center justify-center p-6">
       <div className="w-full max-w-[420px] bg-white rounded-[40px] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.08)] p-8 md:p-10 border border-gray-50">
-        
-        {/* Header Branding */}
         <div className="text-center mb-8">
           <h2 className="text-2xl font-black text-[#111827]">রেমিটেন্স লেজার প্রো</h2>
           <p className="text-sm text-gray-400 mt-1">আপনার ব্যবসার সঠিক হিসাব রাখুন</p>
         </div>
 
-        {/* Tabs */}
         <div className="flex bg-[#F1F4FA] p-1.5 rounded-[22px] mb-8">
           <button 
             type="button"
@@ -99,7 +100,6 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Email Field */}
           <div className="space-y-1">
             <div className="relative group">
               <div className="absolute left-5 top-1/2 -translate-y-1/2 text-[#A3AED0]">
@@ -118,7 +118,6 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
             </div>
           </div>
 
-          {/* Password Field */}
           <div className="space-y-1">
             <div className="relative">
               <div className="absolute left-5 top-1/2 -translate-y-1/2 text-[#A3AED0]">
@@ -161,22 +160,27 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
           <button 
             type="submit"
-            className="w-full bg-[#111827] text-white py-5 rounded-[24px] font-black text-lg shadow-xl shadow-gray-200 hover:bg-[#000] active:scale-[0.98] transition-all flex items-center justify-center gap-3 mt-4"
+            disabled={isLoading}
+            className="w-full bg-[#111827] text-white py-5 rounded-[24px] font-black text-lg shadow-xl shadow-gray-200 hover:bg-[#000] active:scale-[0.98] transition-all flex items-center justify-center gap-3 mt-4 disabled:opacity-70"
           >
-            {isLoginTab ? 'অ্যাপে প্রবেশ করুন' : 'অ্যাকাউন্ট খুলুন'}
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            {isLoading ? (
+               <svg className="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+               </svg>
+            ) : isLoginTab ? 'অ্যাপে প্রবেশ করুন' : 'অ্যাকাউন্ট খুলুন'}
+            {!isLoading && <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
-            </svg>
+            </svg>}
           </button>
         </form>
       </div>
 
-      {/* Footer Branding */}
       <div className="mt-12 flex items-center gap-3 opacity-30 group cursor-default">
         <svg className="w-5 h-5 text-gray-400 group-hover:text-blue-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
         </svg>
-        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">Secure Online Database</span>
+        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">Secure Online Database (Supabase)</span>
       </div>
     </div>
   );

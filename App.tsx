@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { Transaction, TransactionType, BusinessSummary, User } from './types.ts';
 import Dashboard from './components/Dashboard.tsx';
@@ -7,53 +6,81 @@ import TransactionForm from './components/TransactionForm.tsx';
 import AIInput from './components/AIInput.tsx';
 import ProfitAdvisor from './components/ProfitAdvisor.tsx';
 import Auth from './components/Auth.tsx';
+import { supabase } from './services/supabase';
 
 const App: React.FC = () => {
-  const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem('rlp_current_user');
-    return saved ? JSON.parse(saved) : null;
-  });
-
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  
   const [openingBdt, setOpeningBdt] = useState<number>(0);
+  const [isLoading, setIsLoading] = useState(true);
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [tempOpeningBdt, setTempOpeningBdt] = useState('0');
   const [profitTimeRange, setProfitTimeRange] = useState<'today' | '7days' | '30days' | 'total'>('total');
 
-  // Load User Data
+  // Check for existing session on mount
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setCurrentUser({ id: session.user.id, email: session.user.email! });
+      }
+      setIsLoading(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setCurrentUser({ id: session.user.id, email: session.user.email! });
+      } else {
+        setCurrentUser(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Fetch User Data from Supabase
   useEffect(() => {
     if (currentUser) {
-      const savedTxs = localStorage.getItem(`rlp_txs_${currentUser.id}`);
-      setTransactions(savedTxs ? JSON.parse(savedTxs) : []);
-
-      const savedOpening = localStorage.getItem(`rlp_opening_${currentUser.id}`);
-      const opening = savedOpening ? parseFloat(savedOpening) : 0;
-      setOpeningBdt(opening);
-      setTempOpeningBdt(opening.toString());
-      
-      localStorage.setItem('rlp_current_user', JSON.stringify(currentUser));
-    } else {
-      setTransactions([]);
-      setOpeningBdt(0);
-      localStorage.removeItem('rlp_current_user');
+      fetchUserData();
     }
   }, [currentUser]);
 
-  // Save User Data
-  useEffect(() => {
-    if (currentUser) {
-      localStorage.setItem(`rlp_txs_${currentUser.id}`, JSON.stringify(transactions));
-    }
-  }, [transactions, currentUser]);
+  const fetchUserData = async () => {
+    if (!currentUser) return;
+    setIsLoading(true);
+    
+    try {
+      // Fetch Transactions
+      const { data: txs, error: txError } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .order('date', { ascending: false });
 
-  useEffect(() => {
-    if (currentUser) {
-      localStorage.setItem(`rlp_opening_${currentUser.id}`, openingBdt.toString());
+      if (txError) throw txError;
+      setTransactions(txs || []);
+
+      // Fetch Profile (Opening Balance)
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('opening_bdt')
+        .eq('id', currentUser.id)
+        .single();
+
+      if (profileError && profileError.code !== 'PGRST116') { // PGRST116 is "No rows found"
+         throw profileError;
+      }
+      
+      const opening = profile?.opening_bdt || 0;
+      setOpeningBdt(opening);
+      setTempOpeningBdt(opening.toString());
+    } catch (error) {
+      console.error('Error fetching user data:', error);
+    } finally {
+      setIsLoading(false);
     }
-  }, [openingBdt, currentUser]);
+  };
 
   const summary = useMemo(() => {
     let totalInvEur = 0;
@@ -135,138 +162,217 @@ const App: React.FC = () => {
     };
   }, [transactions, openingBdt, profitTimeRange]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     if (confirm('আপনি কি নিশ্চিত যে আপনি লগআউট করতে চান?')) {
+      await supabase.auth.signOut();
       setCurrentUser(null);
     }
   };
+
+  const handleUpdateOpeningBdt = async () => {
+    if (!currentUser) return;
+    const val = parseFloat(tempOpeningBdt) || 0;
+    
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .upsert({ id: currentUser.id, opening_bdt: val });
+
+      if (error) throw error;
+      setOpeningBdt(val);
+      setIsSettingsOpen(false);
+    } catch (error) {
+      console.error('Error updating opening balance:', error);
+      alert('ব্যালেন্স আপডেট করতে সমস্যা হয়েছে।');
+    }
+  };
+
+  const addTransaction = async (newTx: Omit<Transaction, 'id' | 'userId' | 'date' | 'profitEur' | 'profitBdt'>) => {
+    if (!currentUser) return;
+
+    const txToSave = {
+      ...newTx,
+      user_id: currentUser.id,
+      date: Date.now()
+    };
+
+    try {
+      const { data, error } = await supabase
+        .from('transactions')
+        .insert([txToSave])
+        .select();
+
+      if (error) throw error;
+      if (data) {
+        setTransactions(prev => [data[0] as Transaction, ...prev]);
+        // Correcting the name of the state setter from truncated setIsForm to setIsFormOpen
+        setIsFormOpen(false);
+      }
+    } catch (error) {
+      console.error('Error adding transaction:', error);
+      alert('লেনদেন সেভ করতে সমস্যা হয়েছে।');
+    }
+  };
+
+  const deleteTransaction = async (id: string) => {
+    if (!confirm('আপনি কি নিশ্চিত যে এই লেনদেনটি ডিলিট করতে চান?')) return;
+    
+    try {
+      const { error } = await supabase
+        .from('transactions')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      setTransactions(prev => prev.filter(tx => tx.id !== id));
+    } catch (error) {
+      console.error('Error deleting transaction:', error);
+    }
+  };
+
+  const handleCopy = (tx: Transaction) => {
+    const text = `রেমিটেন্স কনফার্মেশন\n-----------------\nটাকা: ৳${tx.bdtAmount.toLocaleString()}\nরেট: ৳${tx.rate.toFixed(2)}\nমোট ইউরো: €${tx.eurAmount}\nতারিখ: ${new Date(tx.date).toLocaleDateString('bn-BD')}\n-----------------\nধন্যবাদ!`;
+    navigator.clipboard.writeText(text);
+    alert('মেসেজ কপি করা হয়েছে।');
+  };
+
+  const handleShare = (tx: Transaction) => {
+    const text = `রেমিটেন্স কনফার্মেশন\n-----------------\nটাকা: ৳${tx.bdtAmount.toLocaleString()}\nরেট: ৳${tx.rate.toFixed(2)}\nমোট ইউরো: €${tx.eurAmount}\nতারিখ: ${new Date(tx.date).toLocaleDateString('bn-BD')}\n-----------------\nধন্যবাদ!`;
+    const encodedText = encodeURIComponent(text);
+    const url = tx.customerPhoneNumber 
+      ? `https://wa.me/${tx.customerPhoneNumber}?text=${encodedText}`
+      : `https://wa.me/?text=${encodedText}`;
+    window.open(url, '_blank');
+  };
+
+  if (isLoading && !currentUser) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
 
   if (!currentUser) {
     return <Auth onLogin={setCurrentUser} />;
   }
 
-  const getMessageText = (tx: Transaction) => {
-    return `${tx.customerPhoneNumber || ''} বিকাশ ${Math.round(tx.bdtAmount)} টাকা`;
-  };
-
-  const copyToClipboard = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      return true;
-    } catch (err) {
-      console.error('Failed to copy: ', err);
-      return false;
-    }
-  };
-
-  const handleShare = async (tx: Transaction) => {
-    const message = getMessageText(tx);
-    await copyToClipboard(message);
-    const encodedMessage = encodeURIComponent(message);
-    const whatsappUrl = `https://api.whatsapp.com/send?text=${encodedMessage}`;
-    window.open(whatsappUrl, '_blank');
-  };
-
-  const addTransaction = (newTx: Omit<Transaction, 'id' | 'userId' | 'date' | 'profitEur' | 'profitBdt'>) => {
-    const tx: Transaction = {
-      ...newTx,
-      id: crypto.randomUUID(),
-      userId: currentUser.id,
-      date: Date.now(),
-      profitBdt: 0,
-      profitEur: 0
-    };
-
-    setTransactions(prev => [tx, ...prev]);
-    setIsFormOpen(false);
-
-    if (tx.type === TransactionType.SELL) {
-      setTimeout(() => {
-        handleShare(tx);
-      }, 300);
-    }
-  };
-
   return (
-    <div className="min-h-screen pb-24 bg-gray-50 font-['Hind_Siliguri']">
-      <header className="bg-blue-600 text-white p-6 shadow-md sticky top-0 z-40">
-        <div className="max-w-6xl mx-auto flex justify-between items-center">
-          <div className="flex flex-col">
-            <h1 className="text-xl md:text-2xl font-bold tracking-tight">রেমিটেন্স লেজার প্রো</h1>
-            <p className="text-blue-100 text-[10px] md:text-xs">অ্যাকাউন্ট: <span className="font-bold">{currentUser.email}</span></p>
+    <div className="min-h-screen bg-[#F8FAFF] text-gray-900 pb-20">
+      {/* Header */}
+      <header className="bg-white border-b border-gray-100 sticky top-0 z-30 px-4 py-4">
+        <div className="max-w-7xl mx-auto flex justify-between items-center">
+          <div>
+            <h1 className="text-xl font-black text-gray-900 tracking-tight">রেমিটেন্স লেজার</h1>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{currentUser.email}</p>
           </div>
-          <div className="flex gap-2">
-            <button onClick={() => setIsSettingsOpen(true)} className="p-2.5 bg-white/10 hover:bg-white/20 rounded-full transition" title="সেটিংস">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => setIsSettingsOpen(true)}
+              className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-xl transition"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
             </button>
-            <button onClick={handleLogout} className="p-2.5 bg-red-500 hover:bg-red-600 rounded-full transition text-white" title="লগআউট">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
+            <button 
+              onClick={handleLogout}
+              className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
             </button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-8">
-          <div className="space-y-4">
-             <div className="flex items-center justify-between px-2">
-                <h2 className="text-xs font-black text-gray-400 uppercase tracking-widest">পারফরম্যান্স রিপোর্ট</h2>
-                <div className="flex bg-gray-200 p-1 rounded-xl gap-1">
-                   {[{id:'today',l:'আজ'},{id:'7days',l:'৭ দিন'},{id:'30days',l:'৩০ দিন'},{id:'total',l:'সব'}].map(r=>(
-                     <button key={r.id} onClick={()=>setProfitTimeRange(r.id as any)} className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition-all ${profitTimeRange===r.id?'bg-white shadow-sm text-blue-600':'text-gray-500'}`}>{r.l}</button>
-                   ))}
-                </div>
-             </div>
-             <Dashboard summary={summary.summary} timeRange={profitTimeRange} />
+      <main className="max-w-7xl mx-auto px-4 py-8 space-y-8">
+        <div className="flex bg-white/50 p-1 rounded-2xl border border-gray-100 w-fit mx-auto md:mx-0">
+          {(['today', '7days', '30days', 'total'] as const).map((range) => (
+            <button
+              key={range}
+              onClick={() => setProfitTimeRange(range)}
+              className={`px-6 py-2 rounded-xl text-xs font-bold transition-all ${
+                profitTimeRange === range ? 'bg-white shadow-md text-blue-600' : 'text-gray-400'
+              }`}
+            >
+              {range === 'today' ? 'আজ' : range === '7days' ? '৭ দিন' : range === '30days' ? '৩০ দিন' : 'সব সময়'}
+            </button>
+          ))}
+        </div>
+
+        <Dashboard summary={summary.summary} timeRange={profitTimeRange} />
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="lg:col-span-2 space-y-8">
+            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-50 flex justify-between items-center">
+                <h2 className="font-black text-gray-800 uppercase text-xs tracking-widest">লেনদেন সমূহ</h2>
+                <span className="bg-blue-50 text-blue-600 text-[10px] font-black px-3 py-1 rounded-full">{summary.transactions.length} টি রেকর্ড</span>
+              </div>
+              <TransactionList 
+                transactions={summary.transactions} 
+                onDelete={deleteTransaction}
+                onShare={handleShare}
+                onCopy={handleCopy}
+                avgBuyingRate={summary.summary.avgBuyingRate}
+              />
+            </div>
           </div>
-          <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-            <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2"><svg className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>লেনদেনের ইতিহাস</h2>
-            <TransactionList 
-              transactions={summary.transactions} 
-              onDelete={(id)=>setTransactions(prev=>prev.filter(t=>t.id!==id))} 
-              avgBuyingRate={summary.summary.avgBuyingRate} 
-              onShare={handleShare} 
-              onCopy={(tx) => copyToClipboard(getMessageText(tx)).then(() => alert('কপি হয়েছে!'))} 
-            />
+
+          <div className="space-y-8">
+            <AIInput onParsed={addTransaction} />
+            <ProfitAdvisor summary={summary.summary} />
           </div>
         </div>
-        <div className="space-y-6"><AIInput onParsed={addTransaction} /><ProfitAdvisor summary={summary.summary} /></div>
       </main>
 
-      <button onClick={()=>setIsFormOpen(true)} className="fixed bottom-8 right-8 w-16 h-16 bg-blue-600 text-white rounded-full shadow-2xl flex items-center justify-center z-50 hover:bg-blue-700 transition-transform active:scale-90"><svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 4v16m8-8H4" /></svg></button>
+      <button 
+        onClick={() => setIsFormOpen(true)}
+        className="fixed bottom-6 right-6 bg-blue-600 text-white p-4 rounded-3xl shadow-2xl shadow-blue-200 hover:bg-blue-700 active:scale-95 transition-all z-40 group"
+      >
+        <svg className="w-8 h-8 group-hover:rotate-90 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 4v16m8-8H4" />
+        </svg>
+      </button>
 
-      {isSettingsOpen && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={()=>setIsSettingsOpen(false)}></div>
-          <div className="relative w-full max-w-sm bg-white rounded-3xl shadow-2xl p-6">
-            <h3 className="text-lg font-black text-gray-800 mb-2 uppercase tracking-tight">প্রারম্ভিক ব্যালেন্স</h3>
-            <p className="text-xs text-gray-400 mb-6">এজেন্টের কাছে আপনার আগের জমানো টাকা বা দেনা লিখুন।</p>
-            <div className="relative mb-6">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">৳</span>
-              <input type="number" value={tempOpeningBdt} onChange={(e)=>setTempOpeningBdt(e.target.value)} className="w-full pl-10 p-4 bg-gray-50 border-0 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition font-black text-xl" />
+      {isFormOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setIsFormOpen(false)}></div>
+          <div className="relative w-full max-w-lg animate-in fade-in zoom-in duration-200">
+            <div className="flex justify-end mb-2">
+               <button onClick={() => setIsFormOpen(false)} className="text-white hover:text-gray-200">
+                 <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+               </button>
             </div>
-            <div className="flex gap-3">
-              <button onClick={()=>setIsSettingsOpen(false)} className="flex-1 py-3 bg-gray-100 rounded-xl font-bold text-gray-500">বাতিল</button>
-              <button onClick={()=>{setOpeningBdt(parseFloat(tempOpeningBdt)||0);setIsSettingsOpen(false);}} className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold">সেভ করুন</button>
-            </div>
+            <TransactionForm onSubmit={addTransaction} avgBuyingRate={summary.summary.avgBuyingRate} />
           </div>
         </div>
       )}
 
-      {isFormOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={()=>setIsFormOpen(false)}></div>
-          <div className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto bg-white rounded-3xl shadow-2xl">
-            <div className="p-4 border-b sticky top-0 bg-white z-10 flex justify-between items-center">
-              <h3 className="font-black text-gray-800 uppercase tracking-wider">নতুন লেনদেন</h3>
-              <button onClick={()=>setIsFormOpen(false)} className="p-2 hover:bg-gray-100 rounded-full text-gray-400 transition"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg></button>
+      {isSettingsOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setIsSettingsOpen(false)}></div>
+          <div className="relative w-full max-w-md bg-white rounded-3xl p-8 shadow-2xl animate-in fade-in zoom-in duration-200">
+            <h2 className="text-xl font-black text-gray-900 mb-6">সেটিংস</h2>
+            <div className="space-y-6">
+              <div>
+                <label className="block text-xs font-black text-gray-400 uppercase mb-2">ওপেনিং বিকাশ ব্যালেন্স (বিডিটি)</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">৳</span>
+                  <input 
+                    type="number" 
+                    value={tempOpeningBdt}
+                    onChange={(e) => setTempOpeningBdt(e.target.value)}
+                    className="w-full pl-10 p-4 bg-gray-50 border-0 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition font-black text-xl"
+                  />
+                </div>
+                <p className="text-[10px] text-gray-400 mt-2 italic">* ব্যবসায় শুরুর ক্যাশ অথবা লোন হিসাব করতে এটি ব্যবহার করুন।</p>
+              </div>
+              <button 
+                onClick={handleUpdateOpeningBdt}
+                className="w-full py-4 bg-gray-900 text-white rounded-2xl font-black uppercase tracking-widest hover:bg-black transition-all"
+              >
+                আপডেট করুন
+              </button>
             </div>
-            <div className="p-6"><TransactionForm onSubmit={addTransaction} avgBuyingRate={summary.summary.avgBuyingRate} /></div>
           </div>
         </div>
       )}
@@ -274,4 +380,5 @@ const App: React.FC = () => {
   );
 };
 
+// Fixed: Added the missing default export to satisfy index.tsx import
 export default App;
