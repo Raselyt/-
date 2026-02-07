@@ -36,15 +36,29 @@ const App: React.FC = () => {
     localStorage.setItem('remittance_opening_bdt', openingBdt.toString());
   }, [openingBdt]);
 
-  const summary = useMemo((): BusinessSummary & { periodProfitEur: number, periodProfitBdt: number } => {
+  // Logic to calculate summary and dynamic profits
+  const summary = useMemo(() => {
     let totalInvEur = 0;
     let totalInvBdt = 0;
-    let totalProfitBdt = 0;
-    let totalProfitEur = 0;
     let currentBdt = openingBdt;
     let currentEur = 0;
     let totalBuyBdt = 0;
     let totalBuyEur = 0;
+
+    // First pass: Calculate Buying Rate only
+    transactions.forEach(tx => {
+      if (tx.type === TransactionType.BUY) {
+        totalInvEur += tx.eurAmount;
+        totalInvBdt += tx.bdtAmount;
+        totalBuyBdt += tx.bdtAmount;
+        totalBuyEur += tx.eurAmount;
+      }
+    });
+
+    const avgBuyingRate = totalBuyEur > 0 ? totalBuyBdt / totalBuyEur : 0;
+
+    let totalProfitBdt = 0;
+    let totalProfitEur = 0;
     let periodProfitEur = 0;
     let periodProfitBdt = 0;
 
@@ -52,20 +66,32 @@ const App: React.FC = () => {
     now.setHours(0, 0, 0, 0);
     const todayTimestamp = now.getTime();
     const oneDay = 24 * 60 * 60 * 1000;
-    
-    transactions.forEach(tx => {
+
+    // Second pass: Calculate balances and DYNAMIC profits based on current Buying Rate
+    const processedTransactions = transactions.map(tx => {
+      let pEur = tx.profitEur;
+      let pBdt = tx.profitBdt;
+
       if (tx.type === TransactionType.BUY) {
-        totalInvEur += tx.eurAmount;
-        totalInvBdt += tx.bdtAmount;
         currentBdt += tx.bdtAmount;
-        currentEur -= tx.eurAmount; 
-        totalBuyBdt += tx.bdtAmount;
-        totalBuyEur += tx.eurAmount;
+        currentEur -= tx.eurAmount;
       } else {
         currentBdt -= tx.bdtAmount;
-        totalProfitBdt += tx.profitBdt;
-        totalProfitEur += tx.profitEur;
-        currentEur += tx.eurAmount; 
+        currentEur += tx.eurAmount;
+
+        // CRITICAL FIX: Only calculate profit if we have a cost basis (avgBuyingRate > 0)
+        if (avgBuyingRate > 0) {
+          const costOfBdtInEur = tx.bdtAmount / avgBuyingRate;
+          pEur = tx.eurAmount - costOfBdtInEur;
+          pBdt = pEur * avgBuyingRate;
+        } else {
+          // No investment yet, so we don't know the profit. It's 0 until we buy Euro.
+          pEur = 0;
+          pBdt = 0;
+        }
+
+        totalProfitBdt += pBdt;
+        totalProfitEur += pEur;
 
         let isInPeriod = false;
         if (profitTimeRange === 'total') isInPeriod = true;
@@ -74,47 +100,69 @@ const App: React.FC = () => {
         else if (profitTimeRange === '30days' && (Date.now() - tx.date) <= (30 * oneDay)) isInPeriod = true;
 
         if (isInPeriod) {
-          periodProfitEur += tx.profitEur;
-          periodProfitBdt += tx.profitBdt;
+          periodProfitEur += pEur;
+          periodProfitBdt += pBdt;
         }
       }
+      return { ...tx, profitEur: pEur, profitBdt: pBdt };
     });
 
     return {
-      totalInvestmentEur: totalInvEur,
-      totalInvestmentBdt: totalInvBdt,
-      avgBuyingRate: totalBuyEur > 0 ? totalBuyBdt / totalBuyEur : 0,
-      totalProfitBdt,
-      totalProfitEur,
-      currentBdtBalance: currentBdt,
-      currentEurBalance: currentEur,
-      openingBalanceBdt: openingBdt,
-      periodProfitEur,
-      periodProfitBdt
+      transactions: processedTransactions,
+      summary: {
+        totalInvestmentEur: totalInvEur,
+        totalInvestmentBdt: totalInvBdt,
+        avgBuyingRate,
+        totalProfitBdt,
+        totalProfitEur,
+        currentBdtBalance: currentBdt,
+        currentEurBalance: currentEur,
+        openingBalanceBdt: openingBdt,
+        periodProfitEur,
+        periodProfitBdt
+      }
     };
   }, [transactions, openingBdt, profitTimeRange]);
 
-  const addTransaction = (newTx: Omit<Transaction, 'id' | 'date' | 'profitEur' | 'profitBdt'>) => {
-    const buyingRate = summary.avgBuyingRate || 0;
-    let profitBdt = 0;
-    let profitEur = 0;
+  const getMessageText = (tx: Transaction) => {
+    return `${tx.customerPhoneNumber || ''} বিকাশ ${Math.round(tx.bdtAmount)} টাকা`;
+  };
 
-    if (newTx.type === TransactionType.SELL) {
-      const costInEur = buyingRate > 0 ? newTx.bdtAmount / buyingRate : 0;
-      profitEur = newTx.eurAmount - costInEur;
-      profitBdt = profitEur * (buyingRate || newTx.rate);
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (err) {
+      console.error('Failed to copy: ', err);
+      return false;
     }
+  };
 
+  const handleShare = async (tx: Transaction) => {
+    const message = getMessageText(tx);
+    await copyToClipboard(message);
+    const encodedMessage = encodeURIComponent(message);
+    const whatsappUrl = `https://api.whatsapp.com/send?text=${encodedMessage}`;
+    window.open(whatsappUrl, '_blank');
+  };
+
+  const addTransaction = (newTx: Omit<Transaction, 'id' | 'date' | 'profitEur' | 'profitBdt'>) => {
     const tx: Transaction = {
       ...newTx,
       id: crypto.randomUUID(),
       date: Date.now(),
-      profitBdt,
-      profitEur
+      profitBdt: 0, // Will be calculated dynamically in useMemo
+      profitEur: 0  // Will be calculated dynamically in useMemo
     };
 
     setTransactions(prev => [tx, ...prev]);
     setIsFormOpen(false);
+
+    if (tx.type === TransactionType.SELL) {
+      setTimeout(() => {
+        handleShare(tx);
+      }, 300);
+    }
   };
 
   return (
@@ -153,14 +201,20 @@ const App: React.FC = () => {
                    ))}
                 </div>
              </div>
-             <Dashboard summary={summary} timeRange={profitTimeRange} />
+             <Dashboard summary={summary.summary} timeRange={profitTimeRange} />
           </div>
           <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
             <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2"><svg className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>লেনদেনের ইতিহাস</h2>
-            <TransactionList transactions={transactions} onDelete={(id)=>setTransactions(prev=>prev.filter(t=>t.id!==id))} avgBuyingRate={summary.avgBuyingRate} />
+            <TransactionList 
+              transactions={summary.transactions} 
+              onDelete={(id)=>setTransactions(prev=>prev.filter(t=>t.id!==id))} 
+              avgBuyingRate={summary.summary.avgBuyingRate} 
+              onShare={handleShare} 
+              onCopy={(tx) => copyToClipboard(getMessageText(tx)).then(() => alert('কপি হয়েছে!'))} 
+            />
           </div>
         </div>
-        <div className="space-y-6"><AIInput onParsed={addTransaction} /><ProfitAdvisor summary={summary} /></div>
+        <div className="space-y-6"><AIInput onParsed={addTransaction} /><ProfitAdvisor summary={summary.summary} /></div>
       </main>
 
       <button onClick={()=>setIsFormOpen(true)} className="fixed bottom-8 right-8 w-16 h-16 bg-blue-600 text-white rounded-full shadow-2xl flex items-center justify-center z-50 hover:bg-blue-700 transition-transform active:scale-90"><svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 4v16m8-8H4" /></svg></button>
@@ -191,7 +245,7 @@ const App: React.FC = () => {
               <h3 className="font-black text-gray-800 uppercase tracking-wider">নতুন লেনদেন</h3>
               <button onClick={()=>setIsFormOpen(false)} className="p-2 hover:bg-gray-100 rounded-full text-gray-400 transition"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg></button>
             </div>
-            <div className="p-6"><TransactionForm onSubmit={addTransaction} avgBuyingRate={summary.avgBuyingRate} /></div>
+            <div className="p-6"><TransactionForm onSubmit={addTransaction} avgBuyingRate={summary.summary.avgBuyingRate} /></div>
           </div>
         </div>
       )}

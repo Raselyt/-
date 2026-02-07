@@ -15,6 +15,7 @@ export interface Transaction {
   profitEur: number; // Primary profit metric in EUR
   profitBdt: number; // Secondary for reference
   note: string;
+  customerPhoneNumber?: string; // Optional customer phone for WhatsApp
 }
 
 export interface BusinessSummary {
