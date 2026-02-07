@@ -6,6 +6,7 @@ import TransactionList from './components/TransactionList.tsx';
 import TransactionForm from './components/TransactionForm.tsx';
 import AIInput from './components/AIInput.tsx';
 import ProfitAdvisor from './components/ProfitAdvisor.tsx';
+import DailyDetails from './components/DailyDetails.tsx';
 import Auth from './components/Auth.tsx';
 import { supabase } from './services/supabase';
 
@@ -19,6 +20,9 @@ const App: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [tempOpeningBdt, setTempOpeningBdt] = useState('0');
   const [profitTimeRange, setProfitTimeRange] = useState<'today' | '7days' | '30days' | 'total'>('total');
+  
+  // Selected date for the Daily Report section
+  const [selectedReportDate, setSelectedReportDate] = useState(new Date().toISOString().split('T')[0]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -195,23 +199,13 @@ const App: React.FC = () => {
     }
   };
 
-  // --- UPDATED WHATSAPP SHARE LOGIC FOR GROUPS ---
   const sendToWhatsApp = (tx: Transaction) => {
     const phone = tx.customerPhoneNumber || '';
     const amount = Math.round(tx.bdtAmount);
-    
-    // exact format: "phone বিকাশ amount টাকা"
     const messageText = `${phone} বিকাশ ${amount} টাকা`;
     const encodedMessage = encodeURIComponent(messageText);
-    
-    /**
-     * IMPORTANT: By NOT providing a phone number in the URL path, 
-     * WhatsApp will open the chat list / group selector.
-     * This allows sharing to any group or contact.
-     */
     const url = `https://wa.me/?text=${encodedMessage}`;
     
-    // Attempt to open WhatsApp
     const newWindow = window.open(url, '_blank');
     if (!newWindow || newWindow.closed || typeof newWindow.closed == 'undefined') {
         window.location.href = url;
@@ -255,7 +249,6 @@ const App: React.FC = () => {
         setTransactions(prev => [savedTx, ...prev]);
         setIsFormOpen(false);
 
-        // --- AUTOMATIC WHATSAPP REDIRECT FOR SELL ---
         if (savedTx.type === TransactionType.SELL) {
           setTimeout(() => {
             sendToWhatsApp(savedTx);
@@ -315,7 +308,15 @@ const App: React.FC = () => {
               <TransactionList transactions={summary.transactions} onDelete={deleteTransaction} onShare={sendToWhatsApp} onCopy={handleCopy} avgBuyingRate={summary.summary.avgBuyingRate} />
             </div>
           </div>
-          <div className="space-y-8"><AIInput onParsed={addTransaction} /><ProfitAdvisor summary={summary.summary} /></div>
+          <div className="space-y-8">
+            <DailyDetails 
+              transactions={transactions} 
+              selectedDate={selectedReportDate} 
+              onDateChange={setSelectedReportDate} 
+            />
+            <AIInput onParsed={addTransaction} />
+            <ProfitAdvisor summary={summary.summary} />
+          </div>
         </div>
       </main>
 
