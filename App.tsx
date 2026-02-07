@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { Transaction, TransactionType, BusinessSummary, User } from './types.ts';
 import Dashboard from './components/Dashboard.tsx';
@@ -194,6 +195,29 @@ const App: React.FC = () => {
     }
   };
 
+  // --- UPDATED WHATSAPP SHARE LOGIC FOR GROUPS ---
+  const sendToWhatsApp = (tx: Transaction) => {
+    const phone = tx.customerPhoneNumber || '';
+    const amount = Math.round(tx.bdtAmount);
+    
+    // exact format: "phone বিকাশ amount টাকা"
+    const messageText = `${phone} বিকাশ ${amount} টাকা`;
+    const encodedMessage = encodeURIComponent(messageText);
+    
+    /**
+     * IMPORTANT: By NOT providing a phone number in the URL path, 
+     * WhatsApp will open the chat list / group selector.
+     * This allows sharing to any group or contact.
+     */
+    const url = `https://wa.me/?text=${encodedMessage}`;
+    
+    // Attempt to open WhatsApp
+    const newWindow = window.open(url, '_blank');
+    if (!newWindow || newWindow.closed || typeof newWindow.closed == 'undefined') {
+        window.location.href = url;
+    }
+  };
+
   const addTransaction = async (newTx: Omit<Transaction, 'id' | 'userId' | 'date' | 'profitEur' | 'profitBdt'>) => {
     if (!currentUser) return;
 
@@ -206,7 +230,7 @@ const App: React.FC = () => {
       rate: newTx.rate,
       cash_out_fee: newTx.cashOutFee,
       note: newTx.note,
-      customer_phone_number: newTx.customerPhoneNumber // This requires the column to exist in Supabase
+      customer_phone_number: newTx.customerPhoneNumber
     };
 
     try {
@@ -231,18 +255,11 @@ const App: React.FC = () => {
         setTransactions(prev => [savedTx, ...prev]);
         setIsFormOpen(false);
 
-        // --- AUTOMATIC WHATSAPP REDIRECT ---
+        // --- AUTOMATIC WHATSAPP REDIRECT FOR SELL ---
         if (savedTx.type === TransactionType.SELL) {
-          const text = `রেমিটেন্স কনফার্মেশন\n-----------------\nটাকা: ৳${savedTx.bdtAmount.toLocaleString()}\nরেট: ৳${savedTx.rate.toFixed(2)}\nমোট ইউরো: €${savedTx.eurAmount}\nতারিখ: ${new Date(savedTx.date).toLocaleDateString('bn-BD')}\n-----------------\nধন্যবাদ!`;
-          const encodedText = encodeURIComponent(text);
-          const url = savedTx.customerPhoneNumber 
-            ? `https://wa.me/${savedTx.customerPhoneNumber}?text=${encodedText}`
-            : `https://wa.me/?text=${encodedText}`;
-          
-          // Small delay to let user see success state, then redirect
           setTimeout(() => {
-            window.open(url, '_blank');
-          }, 500);
+            sendToWhatsApp(savedTx);
+          }, 400);
         }
       }
     } catch (error: any) {
@@ -260,16 +277,10 @@ const App: React.FC = () => {
   };
 
   const handleCopy = (tx: Transaction) => {
-    const text = `রেমিটেন্স কনফার্মেশন\n-----------------\nটাকা: ৳${tx.bdtAmount.toLocaleString()}\nরেট: ৳${tx.rate.toFixed(2)}\nমোট ইউরো: €${tx.eurAmount}\nতারিখ: ${new Date(tx.date).toLocaleDateString('bn-BD')}\n-----------------\nধন্যবাদ!`;
+    const amount = Math.round(tx.bdtAmount);
+    const text = `${tx.customerPhoneNumber || ''} বিকাশ ${amount} টাকা`;
     navigator.clipboard.writeText(text);
     alert('মেসেজ কপি করা হয়েছে।');
-  };
-
-  const handleShare = (tx: Transaction) => {
-    const text = `রেমিটেন্স কনফার্মেশন\n-----------------\nটাকা: ৳${tx.bdtAmount.toLocaleString()}\nরেট: ৳${tx.rate.toFixed(2)}\nমোট ইউরো: €${tx.eurAmount}\nতারিখ: ${new Date(tx.date).toLocaleDateString('bn-BD')}\n-----------------\nধন্যবাদ!`;
-    const encodedText = encodeURIComponent(text);
-    const url = tx.customerPhoneNumber ? `https://wa.me/${tx.customerPhoneNumber}?text=${encodedText}` : `https://wa.me/?text=${encodedText}`;
-    window.open(url, '_blank');
   };
 
   if (isLoading && !currentUser) {
@@ -301,7 +312,7 @@ const App: React.FC = () => {
           <div className="lg:col-span-2 space-y-8">
             <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-50 flex justify-between items-center"><h2 className="font-black text-gray-800 uppercase text-xs tracking-widest">লেনদেন সমূহ</h2><span className="bg-blue-50 text-blue-600 text-[10px] font-black px-3 py-1 rounded-full">{summary.transactions.length} টি রেকর্ড</span></div>
-              <TransactionList transactions={summary.transactions} onDelete={deleteTransaction} onShare={handleShare} onCopy={handleCopy} avgBuyingRate={summary.summary.avgBuyingRate} />
+              <TransactionList transactions={summary.transactions} onDelete={deleteTransaction} onShare={sendToWhatsApp} onCopy={handleCopy} avgBuyingRate={summary.summary.avgBuyingRate} />
             </div>
           </div>
           <div className="space-y-8"><AIInput onParsed={addTransaction} /><ProfitAdvisor summary={summary.summary} /></div>
