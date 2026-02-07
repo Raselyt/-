@@ -4,8 +4,16 @@ export enum TransactionType {
   SELL = 'SELL' // Customer Sent BDT (Profit calculation)
 }
 
+export interface User {
+  id: string;
+  email: string;
+  password?: string;
+  name?: string;
+}
+
 export interface Transaction {
   id: string;
+  userId: string; // Associated with a user
   date: number;
   type: TransactionType;
   eurAmount: number;
@@ -27,4 +35,6 @@ export interface BusinessSummary {
   currentBdtBalance: number;
   currentEurBalance: number;
   openingBalanceBdt: number; // Added to track initial cash/debt
+  periodProfitEur: number;
+  periodProfitBdt: number;
 }

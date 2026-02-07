@@ -1,42 +1,60 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Transaction, TransactionType, BusinessSummary } from './types.ts';
+import { Transaction, TransactionType, BusinessSummary, User } from './types.ts';
 import Dashboard from './components/Dashboard.tsx';
 import TransactionList from './components/TransactionList.tsx';
 import TransactionForm from './components/TransactionForm.tsx';
 import AIInput from './components/AIInput.tsx';
 import ProfitAdvisor from './components/ProfitAdvisor.tsx';
+import Auth from './components/Auth.tsx';
 
 const App: React.FC = () => {
-  const [transactions, setTransactions] = useState<Transaction[]>(() => {
-    try {
-      const saved = localStorage.getItem('remittance_ledger_txs');
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      console.error("Failed to parse transactions", e);
-      return [];
-    }
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    const saved = localStorage.getItem('rlp_current_user');
+    return saved ? JSON.parse(saved) : null;
   });
+
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   
-  const [openingBdt, setOpeningBdt] = useState<number>(() => {
-    const saved = localStorage.getItem('remittance_opening_bdt');
-    return saved ? parseFloat(saved) : 0;
-  });
+  const [openingBdt, setOpeningBdt] = useState<number>(0);
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [tempOpeningBdt, setTempOpeningBdt] = useState(openingBdt.toString());
+  const [tempOpeningBdt, setTempOpeningBdt] = useState('0');
   const [profitTimeRange, setProfitTimeRange] = useState<'today' | '7days' | '30days' | 'total'>('total');
 
+  // Load User Data
   useEffect(() => {
-    localStorage.setItem('remittance_ledger_txs', JSON.stringify(transactions));
-  }, [transactions]);
+    if (currentUser) {
+      const savedTxs = localStorage.getItem(`rlp_txs_${currentUser.id}`);
+      setTransactions(savedTxs ? JSON.parse(savedTxs) : []);
+
+      const savedOpening = localStorage.getItem(`rlp_opening_${currentUser.id}`);
+      const opening = savedOpening ? parseFloat(savedOpening) : 0;
+      setOpeningBdt(opening);
+      setTempOpeningBdt(opening.toString());
+      
+      localStorage.setItem('rlp_current_user', JSON.stringify(currentUser));
+    } else {
+      setTransactions([]);
+      setOpeningBdt(0);
+      localStorage.removeItem('rlp_current_user');
+    }
+  }, [currentUser]);
+
+  // Save User Data
+  useEffect(() => {
+    if (currentUser) {
+      localStorage.setItem(`rlp_txs_${currentUser.id}`, JSON.stringify(transactions));
+    }
+  }, [transactions, currentUser]);
 
   useEffect(() => {
-    localStorage.setItem('remittance_opening_bdt', openingBdt.toString());
-  }, [openingBdt]);
+    if (currentUser) {
+      localStorage.setItem(`rlp_opening_${currentUser.id}`, openingBdt.toString());
+    }
+  }, [openingBdt, currentUser]);
 
-  // Logic to calculate summary and dynamic profits
   const summary = useMemo(() => {
     let totalInvEur = 0;
     let totalInvBdt = 0;
@@ -45,7 +63,6 @@ const App: React.FC = () => {
     let totalBuyBdt = 0;
     let totalBuyEur = 0;
 
-    // First pass: Calculate Buying Rate only
     transactions.forEach(tx => {
       if (tx.type === TransactionType.BUY) {
         totalInvEur += tx.eurAmount;
@@ -67,10 +84,9 @@ const App: React.FC = () => {
     const todayTimestamp = now.getTime();
     const oneDay = 24 * 60 * 60 * 1000;
 
-    // Second pass: Calculate balances and DYNAMIC profits based on current Buying Rate
     const processedTransactions = transactions.map(tx => {
-      let pEur = tx.profitEur;
-      let pBdt = tx.profitBdt;
+      let pEur = 0;
+      let pBdt = 0;
 
       if (tx.type === TransactionType.BUY) {
         currentBdt += tx.bdtAmount;
@@ -79,15 +95,10 @@ const App: React.FC = () => {
         currentBdt -= tx.bdtAmount;
         currentEur += tx.eurAmount;
 
-        // CRITICAL FIX: Only calculate profit if we have a cost basis (avgBuyingRate > 0)
         if (avgBuyingRate > 0) {
           const costOfBdtInEur = tx.bdtAmount / avgBuyingRate;
           pEur = tx.eurAmount - costOfBdtInEur;
           pBdt = pEur * avgBuyingRate;
-        } else {
-          // No investment yet, so we don't know the profit. It's 0 until we buy Euro.
-          pEur = 0;
-          pBdt = 0;
         }
 
         totalProfitBdt += pBdt;
@@ -124,6 +135,16 @@ const App: React.FC = () => {
     };
   }, [transactions, openingBdt, profitTimeRange]);
 
+  const handleLogout = () => {
+    if (confirm('আপনি কি নিশ্চিত যে আপনি লগআউট করতে চান?')) {
+      setCurrentUser(null);
+    }
+  };
+
+  if (!currentUser) {
+    return <Auth onLogin={setCurrentUser} />;
+  }
+
   const getMessageText = (tx: Transaction) => {
     return `${tx.customerPhoneNumber || ''} বিকাশ ${Math.round(tx.bdtAmount)} টাকা`;
   };
@@ -146,13 +167,14 @@ const App: React.FC = () => {
     window.open(whatsappUrl, '_blank');
   };
 
-  const addTransaction = (newTx: Omit<Transaction, 'id' | 'date' | 'profitEur' | 'profitBdt'>) => {
+  const addTransaction = (newTx: Omit<Transaction, 'id' | 'userId' | 'date' | 'profitEur' | 'profitBdt'>) => {
     const tx: Transaction = {
       ...newTx,
       id: crypto.randomUUID(),
+      userId: currentUser.id,
       date: Date.now(),
-      profitBdt: 0, // Will be calculated dynamically in useMemo
-      profitEur: 0  // Will be calculated dynamically in useMemo
+      profitBdt: 0,
+      profitEur: 0
     };
 
     setTransactions(prev => [tx, ...prev]);
@@ -169,22 +191,21 @@ const App: React.FC = () => {
     <div className="min-h-screen pb-24 bg-gray-50 font-['Hind_Siliguri']">
       <header className="bg-blue-600 text-white p-6 shadow-md sticky top-0 z-40">
         <div className="max-w-6xl mx-auto flex justify-between items-center">
-          <div>
+          <div className="flex flex-col">
             <h1 className="text-xl md:text-2xl font-bold tracking-tight">রেমিটেন্স লেজার প্রো</h1>
-            <p className="text-blue-100 text-[10px] md:text-xs">ইতালি - বাংলাদেশ কারেন্সি ব্যবসা অ্যাকাউন্ট্যান্ট</p>
+            <p className="text-blue-100 text-[10px] md:text-xs">অ্যাকাউন্ট: <span className="font-bold">{currentUser.email}</span></p>
           </div>
           <div className="flex gap-2">
-            <button onClick={() => setIsSettingsOpen(true)} className="p-2.5 bg-white/10 hover:bg-white/20 rounded-full transition">
+            <button onClick={() => setIsSettingsOpen(true)} className="p-2.5 bg-white/10 hover:bg-white/20 rounded-full transition" title="সেটিংস">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
             </button>
-            <button onClick={() => setIsFormOpen(true)} className="hidden md:flex items-center gap-2 bg-white text-blue-600 px-5 py-2.5 rounded-full font-bold text-sm shadow-lg hover:bg-blue-50 transition">
+            <button onClick={handleLogout} className="p-2.5 bg-red-500 hover:bg-red-600 rounded-full transition text-white" title="লগআউট">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
               </svg>
-              নতুন এন্ট্রি
             </button>
           </div>
         </div>
