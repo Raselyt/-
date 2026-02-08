@@ -38,6 +38,8 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onSubmit, avgBuyingRa
 
   useEffect(() => {
     const r = parseFloat(rate) || 0;
+    const currentFee = parseFloat(cashOutFee) || 0;
+
     if (type === TransactionType.SELL) {
       setBonusAmount(0);
       if (inputMode === 'BDT') {
@@ -45,6 +47,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onSubmit, avgBuyingRa
         if (bdt > 0 && r > 0) {
           const neededNet = bdt / r;
           const autoFee = getAutoFee(neededNet);
+          // Auto-set the fee, but keep currentFee in the total calculation
           setCashOutFee(autoFee.toString());
           const total = Math.round(neededNet + autoFee);
           setCalculatedTotalEur(total);
@@ -85,6 +88,22 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onSubmit, avgBuyingRa
       }
     }
   }, [type, inputMode, bdtInput, eurInput, rate, transferFee]);
+
+  // Recalculate total if user manually edits fee
+  useEffect(() => {
+    if (type === TransactionType.SELL) {
+      const currentFee = parseFloat(cashOutFee) || 0;
+      if (inputMode === 'BDT') {
+        setCalculatedTotalEur(Math.round(netEur + currentFee));
+      } else {
+        // In EUR mode, total is fixed by input, fee just changes the BDT sent
+        const totalEur = parseInt(eurInput) || 0;
+        const net = totalEur - currentFee;
+        const r = parseFloat(rate) || 0;
+        setCalculatedBdt(net * r);
+      }
+    }
+  }, [cashOutFee]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -180,11 +199,19 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onSubmit, avgBuyingRa
 
         {type === TransactionType.SELL ? (
           <div>
-            <label className="block text-xs font-black text-gray-400 uppercase mb-2 tracking-wider">চার্জ (স্বয়ংক্রিয়)</label>
+            <label className="block text-xs font-black text-gray-400 uppercase mb-2 tracking-wider">চার্জ (এডিট করা যাবে)</label>
             <div className="relative">
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">€</span>
-              <input type="number" value={cashOutFee} readOnly className="w-full pl-10 p-4 bg-gray-50 border-0 rounded-2xl font-bold text-red-600 outline-none" />
+              <input 
+                type="number" 
+                step="any"
+                value={cashOutFee} 
+                onChange={(e) => setCashOutFee(e.target.value)}
+                className="w-full pl-10 p-4 bg-white border-2 border-gray-100 rounded-2xl font-bold text-red-600 focus:ring-2 focus:ring-red-200 outline-none transition" 
+                placeholder="চার্জ লিখুন"
+              />
             </div>
+            <p className="text-[9px] text-gray-400 mt-1 ml-2">* স্বয়ংক্রিয়ভাবে আসা চার্জটি আপনি চাইলে এখান থেকে পরিবর্তন করতে পারেন।</p>
           </div>
         ) : (
           <div>
