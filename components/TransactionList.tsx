@@ -47,8 +47,8 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, onDelet
                   </span>
                 </td>
                 <td className="py-4 px-2">
-                  <div className="text-xs font-black text-gray-800">€{tx.eurAmount.toLocaleString()}</div>
-                  <div className="text-[9px] text-gray-400">৳{tx.bdtAmount.toLocaleString()}</div>
+                  <div className="text-xs font-black text-gray-800">€{Math.round(tx.eurAmount).toLocaleString()}</div>
+                  <div className="text-[9px] text-gray-400">৳{Math.round(tx.bdtAmount).toLocaleString()}</div>
                 </td>
                 <td className="py-4 px-2">
                   {tx.type === TransactionType.BUY ? (
@@ -56,7 +56,7 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, onDelet
                   ) : (
                     <div className="flex flex-col">
                       <span className={`text-xs font-black ${tx.profitEur >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                        {tx.profitEur >= 0 ? '+' : ''}€{tx.profitEur.toFixed(2)}
+                        {tx.profitEur >= 0 ? '+' : ''}€{Math.round(tx.profitEur).toLocaleString()}
                       </span>
                     </div>
                   )}

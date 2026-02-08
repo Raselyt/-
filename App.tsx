@@ -21,7 +21,6 @@ const App: React.FC = () => {
   const [tempOpeningBdt, setTempOpeningBdt] = useState('0');
   const [profitTimeRange, setProfitTimeRange] = useState<'today' | '7days' | '30days' | 'total'>('total');
   
-  // Selected date for the Daily Report section
   const [selectedReportDate, setSelectedReportDate] = useState(new Date().toISOString().split('T')[0]);
 
   useEffect(() => {
@@ -182,7 +181,7 @@ const App: React.FC = () => {
 
   const handleUpdateOpeningBdt = async () => {
     if (!currentUser) return;
-    const val = parseFloat(tempOpeningBdt);
+    const val = Math.round(parseFloat(tempOpeningBdt));
     if (isNaN(val)) { alert('দয়া করে সঠিক সংখ্যা লিখুন।'); return; }
     try {
       const { error } = await supabase.from('profiles').upsert({ 
@@ -215,12 +214,13 @@ const App: React.FC = () => {
   const addTransaction = async (newTx: Omit<Transaction, 'id' | 'userId' | 'date' | 'profitEur' | 'profitBdt'>) => {
     if (!currentUser) return;
 
+    // --- ROUNDING BEFORE SAVE ---
     const txToSave = {
       user_id: currentUser.id,
       date: Date.now(),
       type: newTx.type,
-      eur_amount: newTx.eurAmount,
-      bdt_amount: newTx.bdtAmount,
+      eur_amount: Math.round(newTx.eurAmount),
+      bdt_amount: Math.round(newTx.bdtAmount),
       rate: newTx.rate,
       cash_out_fee: newTx.cashOutFee,
       note: newTx.note,

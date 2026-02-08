@@ -25,11 +25,11 @@ const Dashboard: React.FC<DashboardProps> = ({ summary, timeRange }) => {
         </span>
         <div className="mt-2 flex items-baseline gap-2">
           <span className={`text-4xl font-black ${summary.periodProfitEur >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-            €{summary.periodProfitEur.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            €{Math.round(summary.periodProfitEur).toLocaleString()}
           </span>
         </div>
         <div className="mt-3 text-xs font-bold text-gray-400 border-t pt-2 border-gray-50 flex justify-between items-center">
-          <span>৳{summary.periodProfitBdt.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+          <span>৳{Math.round(summary.periodProfitBdt).toLocaleString()}</span>
           {timeRange === 'total' && summary.totalProfitEur !== summary.periodProfitEur && (
             <span className="text-[9px] uppercase">সব সময়</span>
           )}
@@ -43,13 +43,13 @@ const Dashboard: React.FC<DashboardProps> = ({ summary, timeRange }) => {
         <span className="text-gray-400 text-[10px] font-black uppercase tracking-widest">বিকাশ ব্যালেন্স (বিডিটি)</span>
         <div className="mt-2">
           <span className={`text-4xl font-black ${summary.currentBdtBalance >= 0 ? 'text-blue-600' : 'text-red-500'}`}>
-            ৳{summary.currentBdtBalance.toLocaleString()}
+            ৳{Math.round(summary.currentBdtBalance).toLocaleString()}
           </span>
         </div>
         <div className="mt-3 text-[10px] font-bold text-gray-400 border-t pt-2 border-gray-50 flex justify-between">
           <span>এজেন্টের কাছে বর্তমান জমা</span>
           {summary.openingBalanceBdt !== 0 && (
-             <span className="text-blue-400">শুরু: ৳{summary.openingBalanceBdt.toLocaleString()}</span>
+             <span className="text-blue-400">শুরু: ৳{Math.round(summary.openingBalanceBdt).toLocaleString()}</span>
           )}
         </div>
       </div>
@@ -71,15 +71,15 @@ const Dashboard: React.FC<DashboardProps> = ({ summary, timeRange }) => {
       <div className="md:col-span-2 lg:col-span-3 grid grid-cols-2 md:grid-cols-4 gap-4">
          <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
             <div className="text-[9px] text-gray-400 font-black uppercase mb-1">মোট লাভ (EUR)</div>
-            <div className="text-lg font-bold text-green-600">€{summary.totalProfitEur.toLocaleString(undefined, { maximumFractionDigits: 1 })}</div>
+            <div className="text-lg font-bold text-green-600">€{Math.round(summary.totalProfitEur).toLocaleString()}</div>
          </div>
          <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
             <div className="text-[9px] text-gray-400 font-black uppercase mb-1">মোট ইনভেস্ট (BDT)</div>
-            <div className="text-lg font-bold text-gray-700">৳{summary.totalInvestmentBdt.toLocaleString()}</div>
+            <div className="text-lg font-bold text-gray-700">৳{Math.round(summary.totalInvestmentBdt).toLocaleString()}</div>
          </div>
          <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
             <div className="text-[9px] text-gray-400 font-black uppercase mb-1">আমার কাছে EUR</div>
-            <div className="text-lg font-bold text-gray-700">€{summary.currentEurBalance.toLocaleString()}</div>
+            <div className="text-lg font-bold text-gray-700">€{Math.round(summary.currentEurBalance).toLocaleString()}</div>
          </div>
          <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm border-l-4 border-l-blue-500">
             <div className="text-[9px] text-gray-400 font-black uppercase mb-1">রেমিটেন্স কাউন্টার</div>
