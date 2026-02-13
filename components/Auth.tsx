@@ -14,17 +14,22 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
 
   useEffect(() => {
     setError('');
+    setMessage('');
   }, [isLoginTab]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setMessage('');
     setIsLoading(true);
 
-    if (!email.trim() || !password.trim()) {
+    const cleanEmail = email.toLowerCase().trim();
+
+    if (!cleanEmail || !password.trim()) {
       setError('দয়া করে ইমেইল এবং পাসওয়ার্ড সঠিকভাবে দিন।');
       setIsLoading(false);
       return;
@@ -33,11 +38,17 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     try {
       if (isLoginTab) {
         const { data, error: authError } = await supabase.auth.signInWithPassword({
-          email: email.toLowerCase().trim(),
+          email: cleanEmail,
           password: password,
         });
 
-        if (authError) throw authError;
+        if (authError) {
+          if (authError.message.includes('Invalid login credentials')) {
+            throw new Error('ভুল ইমেইল বা পাসওয়ার্ড! আপনার কি একাউন্ট খোলা আছে? না থাকলে "নতুন একাউন্ট" বাটনে ক্লিক করে রেজিস্ট্রেশন করুন।');
+          }
+          throw authError;
+        }
+
         if (data.user) {
           onLogin({ id: data.user.id, email: data.user.email! });
         }
@@ -49,26 +60,27 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
         }
 
         const { data, error: authError } = await supabase.auth.signUp({
-          email: email.toLowerCase().trim(),
+          email: cleanEmail,
           password: password,
         });
 
         if (authError) throw authError;
+
         if (data.user) {
-          // Initialize profile for new user
-          await supabase.from('profiles').insert([{ id: data.user.id, opening_bdt: 0 }]);
-          onLogin({ id: data.user.id, email: data.user.email! });
+          // If a session exists, log them in immediately
+          if (data.session) {
+             onLogin({ id: data.user.id, email: data.user.email! });
+          } else {
+            // If email confirmation is required
+            setMessage('রেজিস্ট্রেশন সফল হয়েছে! আপনার ইমেইল ইনবক্স চেক করুন এবং একাউন্টটি কনফার্ম করুন। এরপর লগইন করুন।');
+            setIsLoginTab(true);
+            setPassword('');
+          }
         }
       }
     } catch (err: any) {
-      console.error(err);
-      if (err.message.includes('Invalid login credentials')) {
-        setError('ভুল ইমেইল বা পাসওয়ার্ড! আবার চেষ্টা করুন।');
-      } else if (err.message.includes('User already registered')) {
-        setError('এই ইমেইল দিয়ে ইতিপূর্বে অ্যাকাউন্ট খোলা হয়েছে।');
-      } else {
-        setError('সার্ভারে সমস্যা হয়েছে: ' + err.message);
-      }
+      console.error('Auth error:', err);
+      setError(err.message || 'একটি সমস্যা হয়েছে। আবার চেষ্টা করুন।');
     } finally {
       setIsLoading(false);
     }
@@ -78,6 +90,11 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     <div className="min-h-screen bg-[#F8FAFF] flex flex-col items-center justify-center p-6">
       <div className="w-full max-w-[420px] bg-white rounded-[40px] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.08)] p-8 md:p-10 border border-gray-50">
         <div className="text-center mb-8">
+          <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-xl shadow-blue-100">
+            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+          </div>
           <h2 className="text-2xl font-black text-[#111827]">রেমিটেন্স লেজার প্রো</h2>
           <p className="text-sm text-gray-400 mt-1">আপনার ব্যবসার সঠিক হিসাব রাখুন</p>
         </div>
@@ -86,14 +103,14 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
           <button 
             type="button"
             onClick={() => setIsLoginTab(true)}
-            className={`flex-1 py-3.5 rounded-[18px] text-sm font-bold transition-all ${isLoginTab ? 'bg-white text-[#1A1F36] shadow-sm' : 'text-[#697386]'}`}
+            className={`flex-1 py-3.5 rounded-[18px] text-sm font-bold transition-all ${isLoginTab ? 'bg-white text-[#1A1F36] shadow-sm scale-100' : 'text-[#697386] scale-95'}`}
           >
             লগইন
           </button>
           <button 
             type="button"
             onClick={() => setIsLoginTab(false)}
-            className={`flex-1 py-3.5 rounded-[18px] text-sm font-bold transition-all ${!isLoginTab ? 'bg-white text-[#1A1F36] shadow-sm' : 'text-[#697386]'}`}
+            className={`flex-1 py-3.5 rounded-[18px] text-sm font-bold transition-all ${!isLoginTab ? 'bg-white text-[#1A1F36] shadow-sm scale-100' : 'text-[#697386] scale-95'}`}
           >
             নতুন একাউন্ট
           </button>
@@ -101,6 +118,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="space-y-1">
+            <label className="text-[10px] font-black text-gray-400 uppercase ml-2 tracking-widest">ইমেইল এড্রেস</label>
             <div className="relative group">
               <div className="absolute left-5 top-1/2 -translate-y-1/2 text-[#A3AED0]">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -112,13 +130,15 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                 autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="ইমেইল এড্রেস"
-                className="w-full pl-14 pr-5 py-4 bg-white border-2 border-[#E0E5F2] rounded-[24px] focus:border-[#422AFB] outline-none transition-all placeholder-[#A3AED0] text-[#1B2559] font-medium"
+                placeholder="email@example.com"
+                className="w-full pl-14 pr-5 py-4 bg-gray-50/50 border-2 border-[#E0E5F2] rounded-[24px] focus:border-[#422AFB] focus:bg-white outline-none transition-all placeholder-[#A3AED0] text-[#1B2559] font-medium"
+                required
               />
             </div>
           </div>
 
           <div className="space-y-1">
+            <label className="text-[10px] font-black text-gray-400 uppercase ml-2 tracking-widest">পাসওয়ার্ড</label>
             <div className="relative">
               <div className="absolute left-5 top-1/2 -translate-y-1/2 text-[#A3AED0]">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -130,8 +150,9 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                 autoComplete={isLoginTab ? "current-password" : "new-password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="পাসওয়ার্ড"
-                className="w-full pl-14 pr-14 py-4 bg-white border-2 border-[#E0E5F2] rounded-[24px] focus:border-[#422AFB] outline-none transition-all placeholder-[#A3AED0] text-[#1B2559] font-medium"
+                placeholder="••••••"
+                className="w-full pl-14 pr-14 py-4 bg-gray-50/50 border-2 border-[#E0E5F2] rounded-[24px] focus:border-[#422AFB] focus:bg-white outline-none transition-all placeholder-[#A3AED0] text-[#1B2559] font-medium"
+                required
               />
               <button 
                 type="button"
@@ -153,8 +174,14 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
           </div>
 
           {error && (
-            <div className="bg-red-50 p-3 rounded-xl border border-red-100 animate-pulse">
-              <p className="text-red-600 text-[11px] font-bold text-center leading-tight">{error}</p>
+            <div className="bg-red-50 p-4 rounded-2xl border border-red-100 animate-in fade-in slide-in-from-top-2 duration-300">
+              <p className="text-red-600 text-xs font-bold text-center leading-relaxed">{error}</p>
+            </div>
+          )}
+
+          {message && (
+            <div className="bg-green-50 p-4 rounded-2xl border border-green-100 animate-in fade-in slide-in-from-top-2 duration-300">
+              <p className="text-green-700 text-xs font-bold text-center leading-relaxed">{message}</p>
             </div>
           )}
 
@@ -176,11 +203,13 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
         </form>
       </div>
 
-      <div className="mt-12 flex items-center gap-3 opacity-30 group cursor-default">
-        <svg className="w-5 h-5 text-gray-400 group-hover:text-blue-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-        </svg>
-        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">Secure Online Database (Supabase)</span>
+      <div className="mt-12 flex flex-col items-center gap-2 opacity-40">
+        <div className="flex items-center gap-2">
+          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+          </svg>
+          <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">Secure Accounting & Cloud Database</span>
+        </div>
       </div>
     </div>
   );

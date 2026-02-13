@@ -34,7 +34,9 @@ export interface BusinessSummary {
   totalProfitEur: number;
   currentBdtBalance: number;
   currentEurBalance: number;
-  openingBalanceBdt: number; // Added to track initial cash/debt
+  openingBalanceBdt: number; 
+  openingBalanceEur: number; // Added to track initial EUR cash
+  totalCustomerEur: number; // Total EUR received from customers
   periodProfitEur: number;
   periodProfitBdt: number;
 }
