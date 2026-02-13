@@ -13,13 +13,15 @@ import { supabase } from './services/supabase';
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [openingBdt, setOpeningBdt] = useState<number>(0);
+  // Defaulting opening balance to -121720 as requested
+  const [openingBdt, setOpeningBdt] = useState<number>(-121720);
   const [openingEur, setOpeningEur] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [tempOpeningBdt, setTempOpeningBdt] = useState('0');
+  // Pre-set the value to -121720
+  const [tempOpeningBdt, setTempOpeningBdt] = useState('-121720');
   const [profitTimeRange, setProfitTimeRange] = useState<'today' | '7days' | '30days' | 'total'>('total');
   
   const [selectedReportDate, setSelectedReportDate] = useState(new Date().toISOString().split('T')[0]);
@@ -68,10 +70,8 @@ const App: React.FC = () => {
         date: t.date,
         type: t.type as TransactionType,
         eurAmount: t.eur_amount,
-        bdt_amount: t.bdt_amount, // note: backend might use bdt_amount
         bdtAmount: t.bdt_amount,
         rate: t.rate,
-        cash_out_fee: t.cash_out_fee,
         cashOutFee: t.cash_out_fee,
         profitEur: 0,
         profitBdt: 0,
@@ -91,11 +91,12 @@ const App: React.FC = () => {
          throw profileError;
       }
       
-      const bdt = profile?.opening_bdt || 0;
-      const eur = profile?.opening_eur || 0;
-      setOpeningBdt(bdt);
-      setOpeningEur(eur);
-      setTempOpeningBdt(bdt.toString());
+      // If profile exists, use its values, otherwise stick to defaults
+      if (profile) {
+        setOpeningBdt(profile.opening_bdt);
+        setOpeningEur(profile.opening_eur);
+        setTempOpeningBdt(profile.opening_bdt.toString());
+      }
     } catch (error) {
       console.error('Error fetching user data:', error);
     } finally {
