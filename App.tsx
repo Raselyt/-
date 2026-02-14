@@ -7,23 +7,26 @@ import TransactionForm from './components/TransactionForm.tsx';
 import AIInput from './components/AIInput.tsx';
 import ProfitAdvisor from './components/ProfitAdvisor.tsx';
 import DailyDetails from './components/DailyDetails.tsx';
+import MonthlyReport from './components/MonthlyReport.tsx';
 import Auth from './components/Auth.tsx';
 import { supabase } from './services/supabase';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  // Defaulting opening balance to -121720 as requested
+  
+  // Default values
   const [openingBdt, setOpeningBdt] = useState<number>(-121720);
   const [openingEur, setOpeningEur] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  // Pre-set the value to -121720
-  const [tempOpeningBdt, setTempOpeningBdt] = useState('-121720');
-  const [profitTimeRange, setProfitTimeRange] = useState<'today' | '7days' | '30days' | 'total'>('total');
   
+  const [tempOpeningBdt, setTempOpeningBdt] = useState('-121720');
+  const [tempOpeningEur, setTempOpeningEur] = useState('0');
+  
+  const [profitTimeRange, setProfitTimeRange] = useState<'today' | '7days' | '30days' | 'total'>('total');
   const [selectedReportDate, setSelectedReportDate] = useState(new Date().toISOString().split('T')[0]);
 
   useEffect(() => {
@@ -69,10 +72,10 @@ const App: React.FC = () => {
         userId: t.user_id,
         date: t.date,
         type: t.type as TransactionType,
-        eurAmount: t.eur_amount,
-        bdtAmount: t.bdt_amount,
-        rate: t.rate,
-        cashOutFee: t.cash_out_fee,
+        eurAmount: Number(t.eur_amount),
+        bdtAmount: Number(t.bdt_amount),
+        rate: Number(t.rate),
+        cashOutFee: Number(t.cash_out_fee),
         profitEur: 0,
         profitBdt: 0,
         note: t.note,
@@ -91,11 +94,11 @@ const App: React.FC = () => {
          throw profileError;
       }
       
-      // If profile exists, use its values, otherwise stick to defaults
       if (profile) {
-        setOpeningBdt(profile.opening_bdt);
-        setOpeningEur(profile.opening_eur);
+        setOpeningBdt(Number(profile.opening_bdt));
+        setOpeningEur(Number(profile.opening_eur));
         setTempOpeningBdt(profile.opening_bdt.toString());
+        setTempOpeningEur(profile.opening_eur.toString());
       }
     } catch (error) {
       console.error('Error fetching user data:', error);
@@ -105,8 +108,8 @@ const App: React.FC = () => {
   };
 
   const summary = useMemo(() => {
-    let currentBdt = openingBdt;
-    let currentEur = openingEur;
+    let currentBdt = Number(openingBdt);
+    let currentEur = Number(openingEur);
     
     let totalBuyBdt = 0;
     let totalBuyEur = 0;
@@ -114,14 +117,13 @@ const App: React.FC = () => {
     let totalProfitEur = 0;
     let periodProfitEur = 0;
     let periodProfitBdt = 0;
-    let totalCustomerEur = 0;
+    let totalCustomerEur = 0; 
 
-    const buyTxs = transactions.filter(tx => tx.type === TransactionType.BUY);
-    buyTxs.forEach(tx => {
+    // Calculate Average Buying Rate first
+    transactions.filter(tx => tx.type === TransactionType.BUY).forEach(tx => {
       totalBuyBdt += tx.bdtAmount;
       totalBuyEur += tx.eurAmount;
     });
-
     const avgBuyingRate = totalBuyEur > 0 ? totalBuyBdt / totalBuyEur : 0;
 
     const now = new Date();
@@ -136,12 +138,13 @@ const App: React.FC = () => {
       let pBdt = 0;
 
       if (tx.type === TransactionType.BUY) {
-        currentBdt += tx.bdtAmount;
+        currentBdt += tx.bdtAmount; 
         currentEur -= tx.eurAmount;
+        totalCustomerEur -= tx.eurAmount; 
       } else {
-        currentBdt -= tx.bdtAmount;
+        currentBdt -= tx.bdtAmount; 
         currentEur += tx.eurAmount;
-        totalCustomerEur += tx.eurAmount;
+        totalCustomerEur += tx.eurAmount; 
 
         if (avgBuyingRate > 0) {
           const costOfBdtInEur = tx.bdtAmount / avgBuyingRate;
@@ -188,15 +191,24 @@ const App: React.FC = () => {
   const handleUpdateOpeningBalances = async () => {
     if (!currentUser) return;
     const bdtVal = Math.round(parseFloat(tempOpeningBdt));
-    if (isNaN(bdtVal)) { alert('দয়া করে সঠিক সংখ্যা লিখুন।'); return; }
+    const eurVal = Math.round(parseFloat(tempOpeningEur));
+    if (isNaN(bdtVal) || isNaN(eurVal)) { 
+      alert('দয়া করে সঠিক সংখ্যা লিখুন।'); 
+      return; 
+    }
+    
     try {
       const { error } = await supabase.from('profiles').upsert({ 
         id: currentUser.id, 
         opening_bdt: bdtVal,
+        opening_eur: eurVal,
         updated_at: new Date().toISOString()
       }, { onConflict: 'id' });
+      
       if (error) throw error;
+      
       setOpeningBdt(bdtVal);
+      setOpeningEur(eurVal);
       setIsSettingsOpen(false);
       alert('ব্যালেন্স আপডেট হয়েছে!');
     } catch (error: any) {
@@ -208,18 +220,6 @@ const App: React.FC = () => {
     if (confirm('আপনি কি নিশ্চিত যে আপনি লগআউট করতে চান?')) {
       await supabase.auth.signOut();
       setCurrentUser(null);
-    }
-  };
-
-  const sendToWhatsApp = (tx: Transaction) => {
-    const phone = tx.customerPhoneNumber || '';
-    const amount = Math.round(tx.bdtAmount);
-    const messageText = `${phone} বিকাশ ${amount} টাকা`;
-    const encodedMessage = encodeURIComponent(messageText);
-    const url = `https://wa.me/?text=${encodedMessage}`;
-    const newWindow = window.open(url, '_blank');
-    if (!newWindow || newWindow.closed || typeof newWindow.closed == 'undefined') {
-        window.location.href = url;
     }
   };
 
@@ -236,6 +236,7 @@ const App: React.FC = () => {
       note: newTx.note,
       customer_phone_number: newTx.customerPhoneNumber
     };
+    
     try {
       const { data, error } = await supabase.from('transactions').insert([txToSave]).select();
       if (error) throw error;
@@ -245,10 +246,10 @@ const App: React.FC = () => {
           userId: data[0].user_id,
           date: data[0].date,
           type: data[0].type as TransactionType,
-          eurAmount: data[0].eur_amount,
-          bdtAmount: data[0].bdt_amount,
-          rate: data[0].rate,
-          cashOutFee: data[0].cash_out_fee,
+          eurAmount: Number(data[0].eur_amount),
+          bdtAmount: Number(data[0].bdt_amount),
+          rate: Number(data[0].rate),
+          cashOutFee: Number(data[0].cash_out_fee),
           profitEur: 0,
           profitBdt: 0,
           note: data[0].note,
@@ -256,11 +257,10 @@ const App: React.FC = () => {
         };
         setTransactions(prev => [savedTx, ...prev]);
         setIsFormOpen(false);
-        if (savedTx.type === TransactionType.SELL) {
-          setTimeout(() => { sendToWhatsApp(savedTx); }, 400);
-        }
       }
-    } catch (error: any) { alert('লেনদেন সেভ করতে সমস্যা হয়েছে: ' + error.message); }
+    } catch (error: any) { 
+      alert('লেনদেন সেভ করতে সমস্যা হয়েছে: ' + error.message); 
+    }
   };
 
   const deleteTransaction = async (id: string) => {
@@ -270,13 +270,6 @@ const App: React.FC = () => {
       if (error) throw error;
       setTransactions(prev => prev.filter(tx => tx.id !== id));
     } catch (error) { console.error('Error deleting transaction:', error); }
-  };
-
-  const handleCopy = (tx: Transaction) => {
-    const amount = Math.round(tx.bdtAmount);
-    const text = `${tx.customerPhoneNumber || ''} বিকাশ ${amount} টাকা`;
-    navigator.clipboard.writeText(text);
-    alert('মেসেজ কপি করা হয়েছে।');
   };
 
   if (isLoading && !currentUser) {
@@ -291,7 +284,9 @@ const App: React.FC = () => {
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <div><h1 className="text-xl font-black text-gray-900 tracking-tight">রেমিটেন্স লেজার</h1><p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{currentUser.email}</p></div>
           <div className="flex items-center gap-3">
-            <button onClick={() => setIsSettingsOpen(true)} className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-xl transition"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg></button>
+            <button onClick={() => setIsSettingsOpen(true)} className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-xl transition">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+            </button>
             <button onClick={handleLogout} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg></button>
           </div>
         </div>
@@ -316,11 +311,12 @@ const App: React.FC = () => {
                 </h2>
                 <span className="bg-blue-50 text-blue-600 text-[10px] font-black px-4 py-1.5 rounded-full uppercase tracking-tighter shadow-inner">{summary.transactions.length} টি রেকর্ড</span>
               </div>
-              <TransactionList transactions={summary.transactions} onDelete={deleteTransaction} onShare={sendToWhatsApp} onCopy={handleCopy} avgBuyingRate={summary.summary.avgBuyingRate} />
+              <TransactionList transactions={summary.transactions} onDelete={deleteTransaction} onShare={() => {}} onCopy={() => {}} avgBuyingRate={summary.summary.avgBuyingRate} />
             </div>
           </div>
           <div className="space-y-8">
-            <DailyDetails transactions={transactions} selectedDate={selectedReportDate} onDateChange={setSelectedReportDate} />
+            <DailyDetails transactions={summary.transactions} selectedDate={selectedReportDate} onDateChange={setSelectedReportDate} />
+            <MonthlyReport transactions={summary.transactions} />
             <AIInput onParsed={addTransaction} />
             <ProfitAdvisor summary={summary.summary} />
           </div>
@@ -333,7 +329,6 @@ const App: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setIsFormOpen(false)}></div>
           <div className="relative w-full max-w-lg animate-in fade-in zoom-in duration-200">
-            <div className="flex justify-end mb-2"><button onClick={() => setIsFormOpen(false)} className="text-white hover:text-gray-200 bg-black/20 p-2 rounded-full"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg></button></div>
             <TransactionForm onSubmit={addTransaction} avgBuyingRate={summary.summary.avgBuyingRate} />
           </div>
         </div>
@@ -342,25 +337,41 @@ const App: React.FC = () => {
       {isSettingsOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setIsSettingsOpen(false)}></div>
-          <div className="relative w-full max-w-md bg-white rounded-[32px] p-8 shadow-2xl animate-in fade-in zoom-in duration-200 border border-gray-100 overflow-hidden">
-            <h2 className="text-2xl font-black text-gray-900 mb-6 text-center">সেটিংস</h2>
-            <div className="space-y-6">
-              <div>
-                <label className="block text-xs font-bold text-gray-500 mb-3 ml-1">ওপেনিং বিকাশ ব্যালেন্স (বিডিটি)</label>
+          <div className="relative w-full max-w-md bg-white rounded-[40px] p-10 shadow-2xl animate-in fade-in zoom-in duration-200 border border-gray-100 overflow-hidden">
+            <h2 className="text-3xl font-black text-gray-900 mb-8 text-center tracking-tight">ব্যালেন্স সেটিংস</h2>
+            <div className="space-y-8">
+              <div className="bg-red-50/50 p-6 rounded-[30px] border border-red-100">
+                <label className="block text-[11px] font-bold text-red-500 mb-4 ml-1 uppercase tracking-wider">শুরুতে বিকাশ এজেন্ট আপনার কাছে কত পেত?</label>
                 <div className="relative group">
-                  <span className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 font-bold group-focus-within:text-blue-500 transition-colors">৳</span>
+                  <span className="absolute left-6 top-1/2 -translate-y-1/2 text-red-300 font-bold group-focus-within:text-red-500 transition-colors text-xl">৳</span>
                   <input 
                     type="number" 
                     value={tempOpeningBdt} 
                     onChange={(e) => setTempOpeningBdt(e.target.value)} 
-                    className="w-full pl-12 p-5 bg-gray-50 border-2 border-transparent rounded-[20px] focus:border-blue-500 focus:bg-white outline-none transition font-black text-2xl" 
+                    className="w-full pl-14 p-6 bg-white border-2 border-transparent rounded-[24px] focus:border-red-400 focus:bg-white outline-none transition font-black text-2xl text-red-600 placeholder-red-200 shadow-sm"
+                    placeholder="যেমন: -121720"
                   />
                 </div>
-                <p className="text-[10px] text-gray-400 mt-3 italic px-1 font-medium leading-relaxed">
-                  * ব্যবসায় শুরুর ক্যাশ অথবা লোন হিসাব করতে এটি ব্যবহার করুন।
+                <p className="text-[10px] text-red-400 mt-4 italic font-medium px-1">
+                   * আপনি যদি ঋণ নিয়ে শুরু করেন, তবে সংখ্যার আগে মাইনাস (-) দিন।
                 </p>
               </div>
-              <button onClick={handleUpdateOpeningBalances} className="w-full py-5 bg-[#111827] text-white rounded-[20px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-xl shadow-gray-200">আপডেট করুন</button>
+
+              <div className="bg-orange-50/50 p-6 rounded-[30px] border border-orange-100">
+                <label className="block text-[11px] font-bold text-orange-500 mb-4 ml-1 uppercase tracking-wider">শুরুতে আপনার কাছে কত ইউরো ক্যাশ ছিল?</label>
+                <div className="relative group">
+                  <span className="absolute left-6 top-1/2 -translate-y-1/2 text-orange-300 font-bold group-focus-within:text-orange-500 transition-colors text-xl">€</span>
+                  <input 
+                    type="number" 
+                    value={tempOpeningEur} 
+                    onChange={(e) => setTempOpeningEur(e.target.value)} 
+                    className="w-full pl-14 p-6 bg-white border-2 border-transparent rounded-[24px] focus:border-orange-400 focus:bg-white outline-none transition font-black text-2xl text-orange-600 placeholder-orange-200 shadow-sm"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+
+              <button onClick={handleUpdateOpeningBalances} className="w-full py-6 bg-[#111827] text-white rounded-[24px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-xl shadow-gray-200 active:scale-95">ব্যালেন্স আপডেট করুন</button>
             </div>
           </div>
         </div>

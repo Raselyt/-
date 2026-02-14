@@ -98,8 +98,10 @@ const Dashboard: React.FC<DashboardProps> = ({ summary, timeRange, onOpenSetting
           <span className="text-xl font-black text-gray-700">৳{Math.round(summary.totalInvestmentBdt).toLocaleString()}</span>
         </div>
         <div className="bg-white px-6 py-5 rounded-[24px] border border-gray-100 shadow-sm flex flex-col justify-center">
-          <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">মোট সংগৃহীত ইউরো</span>
-          <span className="text-xl font-black text-blue-600">€{Math.round(summary.totalCustomerEur).toLocaleString()}</span>
+          <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">হাতে থাকা সংগৃহীত ইউরো</span>
+          <span className={`text-xl font-black ${summary.totalCustomerEur >= 0 ? 'text-blue-600' : 'text-red-500'}`}>
+            €{Math.round(summary.totalCustomerEur).toLocaleString()}
+          </span>
         </div>
         <div className="bg-white px-6 py-5 rounded-[24px] border border-gray-100 shadow-sm flex flex-col justify-center">
           <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">গড় কেনা রেট</span>
