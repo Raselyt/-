@@ -223,6 +223,21 @@ const App: React.FC = () => {
     }
   };
 
+  const sendToWhatsApp = (tx: Transaction) => {
+    const phone = tx.customerPhoneNumber || '';
+    const amount = Math.round(tx.bdtAmount);
+    // User requested format: "01813333310 বিকাশ 2040 টাকা"
+    const messageText = `${phone} বিকাশ ${amount} টাকা`;
+    const encodedMessage = encodeURIComponent(messageText);
+    const url = `https://wa.me/?text=${encodedMessage}`;
+    
+    // Attempt to open in new tab
+    const newWindow = window.open(url, '_blank');
+    if (!newWindow || newWindow.closed || typeof newWindow.closed == 'undefined') {
+        window.location.href = url;
+    }
+  };
+
   const addTransaction = async (newTx: Omit<Transaction, 'id' | 'userId' | 'date' | 'profitEur' | 'profitBdt'>) => {
     if (!currentUser) return;
     const txToSave = {
@@ -257,6 +272,13 @@ const App: React.FC = () => {
         };
         setTransactions(prev => [savedTx, ...prev]);
         setIsFormOpen(false);
+
+        // Auto-share to WhatsApp for SELL transactions
+        if (savedTx.type === TransactionType.SELL) {
+          setTimeout(() => {
+            sendToWhatsApp(savedTx);
+          }, 400);
+        }
       }
     } catch (error: any) { 
       alert('লেনদেন সেভ করতে সমস্যা হয়েছে: ' + error.message); 
@@ -270,6 +292,13 @@ const App: React.FC = () => {
       if (error) throw error;
       setTransactions(prev => prev.filter(tx => tx.id !== id));
     } catch (error) { console.error('Error deleting transaction:', error); }
+  };
+
+  const handleCopy = (tx: Transaction) => {
+    const amount = Math.round(tx.bdtAmount);
+    const text = `${tx.customerPhoneNumber || ''} বিকাশ ${amount} টাকা`;
+    navigator.clipboard.writeText(text);
+    alert('মেসেজ কপি করা হয়েছে।');
   };
 
   if (isLoading && !currentUser) {
@@ -311,7 +340,13 @@ const App: React.FC = () => {
                 </h2>
                 <span className="bg-blue-50 text-blue-600 text-[10px] font-black px-4 py-1.5 rounded-full uppercase tracking-tighter shadow-inner">{summary.transactions.length} টি রেকর্ড</span>
               </div>
-              <TransactionList transactions={summary.transactions} onDelete={deleteTransaction} onShare={() => {}} onCopy={() => {}} avgBuyingRate={summary.summary.avgBuyingRate} />
+              <TransactionList 
+                transactions={summary.transactions} 
+                onDelete={deleteTransaction} 
+                onShare={sendToWhatsApp} 
+                onCopy={handleCopy} 
+                avgBuyingRate={summary.summary.avgBuyingRate} 
+              />
             </div>
           </div>
           <div className="space-y-8">
