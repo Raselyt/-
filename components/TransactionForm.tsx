@@ -47,7 +47,6 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onSubmit, avgBuyingRa
         if (bdt > 0 && r > 0) {
           const neededNet = bdt / r;
           const autoFee = getAutoFee(neededNet);
-          // Auto-set the fee, but keep currentFee in the total calculation
           setCashOutFee(autoFee.toString());
           const total = Math.round(neededNet + autoFee);
           setCalculatedTotalEur(total);
@@ -72,31 +71,52 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onSubmit, avgBuyingRa
         }
       }
     } else {
-      const principalEur = parseInt(eurInput) || 0;
-      const tFee = parseFloat(transferFee) || 0;
-      if (principalEur > 0 && r > 0) {
-        const baseBdt = principalEur * r;
-        const bonus = baseBdt * 0.025;
-        setBonusAmount(bonus);
-        setCalculatedBdt(baseBdt + bonus);
-        setCalculatedTotalEur(principalEur + tFee);
-        setNetEur(principalEur);
+      // BUY logic
+      if (inputMode === 'BDT') {
+        const grossBdt = parseFloat(bdtInput) || 0;
+        if (grossBdt > 0 && r > 0) {
+          // User inputs 50,000. Deduct 2.5% charge to find net BDT.
+          const charge = grossBdt * 0.025;
+          const netBdt = grossBdt - charge;
+          // Calculate EUR by dividing net BDT by rate
+          const calculatedEur = Math.round(netBdt / r);
+          
+          setBonusAmount(-charge); // It's a deduction in this mode
+          setCalculatedBdt(grossBdt);
+          setCalculatedTotalEur(calculatedEur);
+          setNetEur(calculatedEur);
+        } else {
+          setCalculatedBdt(0);
+          setCalculatedTotalEur(0);
+          setBonusAmount(0);
+        }
       } else {
-        setCalculatedBdt(0);
-        setCalculatedTotalEur(0);
-        setBonusAmount(0);
+        // EUR Mode (Old logic: Bonus added to BDT)
+        const principalEur = parseInt(eurInput) || 0;
+        const tFee = parseFloat(transferFee) || 0;
+        if (principalEur > 0 && r > 0) {
+          const baseBdt = principalEur * r;
+          const bonus = baseBdt * 0.025;
+          setBonusAmount(bonus);
+          setCalculatedBdt(baseBdt + bonus);
+          setCalculatedTotalEur(principalEur + tFee);
+          setNetEur(principalEur);
+        } else {
+          setCalculatedBdt(0);
+          setCalculatedTotalEur(0);
+          setBonusAmount(0);
+        }
       }
     }
   }, [type, inputMode, bdtInput, eurInput, rate, transferFee]);
 
-  // Recalculate total if user manually edits fee
+  // Recalculate total if user manually edits fee in SELL mode
   useEffect(() => {
     if (type === TransactionType.SELL) {
       const currentFee = parseFloat(cashOutFee) || 0;
       if (inputMode === 'BDT') {
         setCalculatedTotalEur(Math.round(netEur + currentFee));
       } else {
-        // In EUR mode, total is fixed by input, fee just changes the BDT sent
         const totalEur = parseInt(eurInput) || 0;
         const net = totalEur - currentFee;
         const r = parseFloat(rate) || 0;
@@ -117,7 +137,9 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onSubmit, avgBuyingRa
       rate: finalRate,
       bdtAmount: calculatedBdt,
       cashOutFee: type === TransactionType.SELL ? (parseFloat(cashOutFee) || 0) : (parseFloat(transferFee) || 0),
-      note: note || (type === TransactionType.BUY ? `ইনভেস্টমেন্ট (+২.৫% বোনাস)` : `রেমিটেন্স: ৳${Math.round(calculatedBdt)}`),
+      note: note || (type === TransactionType.BUY ? 
+        (inputMode === 'BDT' ? `ইনভেস্ট (২.৫% কর্তন শেষে)` : `ইনভেস্ট (+২.৫% বোনাস)`) : 
+        `রেমিটেন্স: ৳${Math.round(calculatedBdt)}`),
       customerPhoneNumber: type === TransactionType.SELL ? phoneNumber : undefined
     });
 
@@ -151,12 +173,20 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onSubmit, avgBuyingRa
         </button>
       </div>
 
-      {type === TransactionType.SELL && (
-        <div className="flex mb-5 gap-2 justify-center">
-          <button onClick={() => { setInputMode('EUR'); setBdtInput(''); }} className={`px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-wider transition-all shadow-sm ${inputMode === 'EUR' ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-400'}`}>ইউরো দিয়ে হিসাব</button>
-          <button onClick={() => { setInputMode('BDT'); setEurInput(''); }} className={`px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-wider transition-all shadow-sm ${inputMode === 'BDT' ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-400'}`}>টাকা দিয়ে হিসাব</button>
-        </div>
-      )}
+      <div className="flex mb-5 gap-2 justify-center">
+        <button 
+          onClick={() => { setInputMode('EUR'); setBdtInput(''); }} 
+          className={`px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-wider transition-all shadow-sm ${inputMode === 'EUR' ? (type === TransactionType.BUY ? 'bg-blue-600' : 'bg-green-600') + ' text-white' : 'bg-gray-100 text-gray-400'}`}
+        >
+          ইউরো দিয়ে হিসাব
+        </button>
+        <button 
+          onClick={() => { setInputMode('BDT'); setEurInput(''); }} 
+          className={`px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-wider transition-all shadow-sm ${inputMode === 'BDT' ? (type === TransactionType.BUY ? 'bg-blue-600' : 'bg-green-600') + ' text-white' : 'bg-gray-100 text-gray-400'}`}
+        >
+          টাকা দিয়ে হিসাব
+        </button>
+      </div>
 
       <form onSubmit={handleSubmit} className="space-y-5">
         <div>
@@ -177,9 +207,9 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onSubmit, avgBuyingRa
           </div>
         )}
 
-        {(type === TransactionType.BUY || (type === TransactionType.SELL && inputMode === 'EUR')) && (
+        {inputMode === 'EUR' && (
           <div>
-            <label className="block text-xs font-black text-gray-400 uppercase mb-2 tracking-wider">{type === TransactionType.BUY ? 'ইনভেস্ট ইউরো' : 'কাস্টমার কত ইউরো দিবে?'}</label>
+            <label className="block text-xs font-black text-gray-400 uppercase mb-2 tracking-wider">{type === TransactionType.BUY ? 'কত ইউরো ইনভেস্ট করেছেন?' : 'কাস্টমার কত ইউরো দিবে?'}</label>
             <div className="relative">
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">€</span>
               <input type="number" required value={eurInput} onChange={(e) => setEurInput(e.target.value)} className="w-full pl-10 p-4 bg-gray-50 border-0 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition font-black text-xl text-gray-800" placeholder="যেমন: ১০০" />
@@ -187,13 +217,14 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onSubmit, avgBuyingRa
           </div>
         )}
 
-        {type === TransactionType.SELL && inputMode === 'BDT' && (
+        {inputMode === 'BDT' && (
           <div>
-            <label className="block text-xs font-black text-gray-400 uppercase mb-2 tracking-wider">বাংলাদেশে কত টাকা পাঠাবে?</label>
+            <label className="block text-xs font-black text-gray-400 uppercase mb-2 tracking-wider">{type === TransactionType.BUY ? 'বাংলাদেশে কত টাকা জমা করেছেন?' : 'বাংলাদেশে কত টাকা পাঠাবে?'}</label>
             <div className="relative">
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">৳</span>
-              <input type="number" required value={bdtInput} onChange={(e) => setBdtInput(e.target.value)} className="w-full pl-10 p-4 bg-gray-50 border-0 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition font-black text-xl text-gray-800" placeholder="যেমন: ২০০০০" />
+              <input type="number" required value={bdtInput} onChange={(e) => setBdtInput(e.target.value)} className="w-full pl-10 p-4 bg-gray-50 border-0 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition font-black text-xl text-gray-800" placeholder="যেমন: ৫০০০০" />
             </div>
+            {type === TransactionType.BUY && <p className="text-[9px] text-blue-500 mt-2 ml-2 font-bold">* এই টাকা থেকে অটো ২.৫% চার্জ বাদ দিয়ে ইউরো হিসাব হবে।</p>}
           </div>
         )}
 
@@ -211,16 +242,17 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onSubmit, avgBuyingRa
                 placeholder="চার্জ লিখুন"
               />
             </div>
-            <p className="text-[9px] text-gray-400 mt-1 ml-2">* স্বয়ংক্রিয়ভাবে আসা চার্জটি আপনি চাইলে এখান থেকে পরিবর্তন করতে পারেন।</p>
           </div>
         ) : (
-          <div>
-            <label className="block text-xs font-black text-gray-400 uppercase mb-2 tracking-wider">পাঠাতে খরচ (EUR)</label>
-            <div className="relative">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">€</span>
-              <input type="number" step="any" value={transferFee} onChange={(e) => setTransferFee(e.target.value)} className="w-full pl-10 p-4 bg-gray-50 border-0 rounded-2xl font-bold text-red-500 focus:ring-2 focus:ring-red-300 outline-none transition" />
+          inputMode === 'EUR' && (
+            <div>
+              <label className="block text-xs font-black text-gray-400 uppercase mb-2 tracking-wider">পাঠাতে খরচ (EUR)</label>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">€</span>
+                <input type="number" step="any" value={transferFee} onChange={(e) => setTransferFee(e.target.value)} className="w-full pl-10 p-4 bg-gray-50 border-0 rounded-2xl font-bold text-red-500 focus:ring-2 focus:ring-red-300 outline-none transition" />
+              </div>
             </div>
-          </div>
+          )
         )}
 
         {(calculatedBdt > 0 || calculatedTotalEur > 0) && (
