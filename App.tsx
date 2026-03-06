@@ -111,55 +111,70 @@ const App: React.FC = () => {
     let currentBdt = Number(openingBdt);
     let currentEur = Number(openingEur);
     
-    let totalBuyBdt = 0;
-    let totalBuyEur = 0;
+    let globalTotalBuyBdt = 0;
+    let globalTotalBuyEur = 0;
+    
+    let periodTotalBuyBdt = 0;
+    let periodTotalBuyEur = 0;
+
     let totalProfitBdt = 0;
     let totalProfitEur = 0;
     let periodProfitEur = 0;
     let periodProfitBdt = 0;
     let totalCustomerEur = 0; 
 
-    // Calculate Average Buying Rate first
-    transactions.filter(tx => tx.type === TransactionType.BUY).forEach(tx => {
-      totalBuyBdt += tx.bdtAmount;
-      totalBuyEur += tx.eurAmount;
-    });
-    const avgBuyingRate = totalBuyEur > 0 ? totalBuyBdt / totalBuyEur : 0;
-
     const now = new Date();
     now.setHours(0, 0, 0, 0);
     const todayTimestamp = now.getTime();
     const oneDay = 24 * 60 * 60 * 1000;
 
+    // 1. Calculate Global Average Buying Rate (needed for profit calculation of all transactions)
+    transactions.filter(tx => tx.type === TransactionType.BUY).forEach(tx => {
+      globalTotalBuyBdt += tx.bdtAmount;
+      globalTotalBuyEur += tx.eurAmount;
+    });
+    const globalAvgBuyingRate = globalTotalBuyEur > 0 ? globalTotalBuyBdt / globalTotalBuyEur : 0;
+
+    // 2. Sort and process transactions
     const sortedTxs = [...transactions].sort((a, b) => a.date - b.date);
 
     const processedTransactions = sortedTxs.map(tx => {
       let pEur = 0;
       let pBdt = 0;
 
+      const isToday = tx.date >= todayTimestamp;
+      const isLast7Days = (Date.now() - tx.date) <= (7 * oneDay);
+      const isLast30Days = (Date.now() - tx.date) <= (30 * oneDay);
+
+      let isInPeriod = false;
+      if (profitTimeRange === 'total') isInPeriod = true;
+      else if (profitTimeRange === 'today' && isToday) isInPeriod = true;
+      else if (profitTimeRange === '7days' && isLast7Days) isInPeriod = true;
+      else if (profitTimeRange === '30days' && isLast30Days) isInPeriod = true;
+
       if (tx.type === TransactionType.BUY) {
         currentBdt += tx.bdtAmount; 
         currentEur -= tx.eurAmount;
         totalCustomerEur -= tx.eurAmount; 
+        
+        if (isInPeriod) {
+          periodTotalBuyBdt += tx.bdtAmount;
+          periodTotalBuyEur += tx.eurAmount;
+        }
       } else {
         currentBdt -= tx.bdtAmount; 
         currentEur += tx.eurAmount;
         totalCustomerEur += tx.eurAmount; 
 
-        if (avgBuyingRate > 0) {
-          const costOfBdtInEur = tx.bdtAmount / avgBuyingRate;
+        // Profit is always calculated based on the global cost basis (Average Buying Rate)
+        if (globalAvgBuyingRate > 0) {
+          const costOfBdtInEur = tx.bdtAmount / globalAvgBuyingRate;
           pEur = tx.eurAmount - costOfBdtInEur;
-          pBdt = pEur * avgBuyingRate;
+          pBdt = pEur * globalAvgBuyingRate;
         }
 
         totalProfitBdt += pBdt;
         totalProfitEur += pEur;
-
-        let isInPeriod = false;
-        if (profitTimeRange === 'total') isInPeriod = true;
-        else if (profitTimeRange === 'today' && tx.date >= todayTimestamp) isInPeriod = true;
-        else if (profitTimeRange === '7days' && (Date.now() - tx.date) <= (7 * oneDay)) isInPeriod = true;
-        else if (profitTimeRange === '30days' && (Date.now() - tx.date) <= (30 * oneDay)) isInPeriod = true;
 
         if (isInPeriod) {
           periodProfitEur += pEur;
@@ -169,12 +184,20 @@ const App: React.FC = () => {
       return { ...tx, profitEur: pEur, profitBdt: pBdt };
     }).reverse();
 
+    // Determine what to show in the dashboard cards
+    const displayAvgBuyingRate = (profitTimeRange !== 'total' && periodTotalBuyEur > 0) 
+      ? (periodTotalBuyBdt / periodTotalBuyEur) 
+      : globalAvgBuyingRate;
+
+    const displayTotalInvestmentBdt = profitTimeRange === 'total' ? globalTotalBuyBdt : periodTotalBuyBdt;
+    const displayTotalInvestmentEur = profitTimeRange === 'total' ? globalTotalBuyEur : periodTotalBuyEur;
+
     return {
       transactions: processedTransactions,
       summary: {
-        totalInvestmentEur: totalBuyEur,
-        totalInvestmentBdt: totalBuyBdt,
-        avgBuyingRate,
+        totalInvestmentEur: displayTotalInvestmentEur,
+        totalInvestmentBdt: displayTotalInvestmentBdt,
+        avgBuyingRate: displayAvgBuyingRate,
         totalProfitBdt,
         totalProfitEur,
         currentBdtBalance: currentBdt,

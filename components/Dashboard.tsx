@@ -94,7 +94,7 @@ const Dashboard: React.FC<DashboardProps> = ({ summary, timeRange, onOpenSetting
           <span className="text-xl font-black text-green-600">€{Math.round(summary.totalProfitEur).toLocaleString()}</span>
         </div>
         <div className="bg-white px-6 py-5 rounded-[24px] border border-gray-100 shadow-sm flex flex-col justify-center">
-          <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">মোট ইনভেস্ট (BDT)</span>
+          <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">{timeRange === 'total' ? 'মোট ইনভেস্ট (BDT)' : 'নির্বাচিত ইনভেস্ট (BDT)'}</span>
           <span className="text-xl font-black text-gray-700">৳{Math.round(summary.totalInvestmentBdt).toLocaleString()}</span>
         </div>
         <div className="bg-white px-6 py-5 rounded-[24px] border border-gray-100 shadow-sm flex flex-col justify-center">
@@ -104,7 +104,7 @@ const Dashboard: React.FC<DashboardProps> = ({ summary, timeRange, onOpenSetting
           </span>
         </div>
         <div className="bg-white px-6 py-5 rounded-[24px] border border-gray-100 shadow-sm flex flex-col justify-center">
-          <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">গড় কেনা রেট</span>
+          <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">{timeRange === 'total' ? 'গড় কেনা রেট' : 'নির্বাচিত গড় রেট'}</span>
           <span className="text-xl font-black text-orange-500">৳{summary.avgBuyingRate.toFixed(2)}</span>
         </div>
       </div>
