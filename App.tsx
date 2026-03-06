@@ -529,7 +529,7 @@ const App: React.FC = () => {
           </div>
           <div className="space-y-8">
             <DailyDetails transactions={summary.transactions} selectedDate={selectedReportDate} onDateChange={setSelectedReportDate} />
-            <MonthlyReport transactions={summary.transactions} />
+            <MonthlyReport transactions={summary.transactions} userEmail={currentUser?.email} />
             <AIInput onParsed={addTransaction} />
             <ProfitAdvisor summary={summary.summary} />
           </div>

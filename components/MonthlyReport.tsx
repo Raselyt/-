@@ -1,18 +1,27 @@
 
 import React, { useState, useMemo } from 'react';
 import { Transaction, TransactionType } from '../types';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { FileText, Download } from 'lucide-react';
 
 interface MonthlyReportProps {
   transactions: Transaction[];
+  userEmail?: string;
 }
 
-const MonthlyReport: React.FC<MonthlyReportProps> = ({ transactions }) => {
+const MonthlyReport: React.FC<MonthlyReportProps> = ({ transactions, userEmail }) => {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
   const months = [
     'জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন',
     'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'
+  ];
+
+  const monthsEng = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
   ];
 
   const currentYear = new Date().getFullYear();
@@ -36,10 +45,97 @@ const MonthlyReport: React.FC<MonthlyReportProps> = ({ transactions }) => {
       .filter(tx => tx.type === TransactionType.SELL)
       .reduce((sum, tx) => sum + tx.profitEur, 0);
 
+    const expensesEur = filtered
+      .filter(tx => tx.type === TransactionType.EXPENSE)
+      .reduce((sum, tx) => sum + tx.eurAmount, 0);
+
+    const expensesBdt = filtered
+      .filter(tx => tx.type === TransactionType.EXPENSE)
+      .reduce((sum, tx) => sum + tx.bdtAmount, 0);
+
     const txCount = filtered.filter(tx => tx.type === TransactionType.SELL).length;
 
-    return { bdtSent, eurCollected, profitEur, txCount };
+    return { bdtSent, eurCollected, profitEur, expensesEur, expensesBdt, txCount, filtered };
   }, [transactions, selectedMonth, selectedYear]);
+
+  const downloadPDF = () => {
+    try {
+      const doc = new jsPDF();
+      const monthName = monthsEng[selectedMonth];
+      
+      doc.setFontSize(20);
+      doc.setTextColor(37, 99, 235); // Blue
+      doc.text(`Monthly Financial Report`, 14, 20);
+      
+      doc.setFontSize(12);
+      doc.setTextColor(100);
+      doc.text(`Period: ${monthName} ${selectedYear}`, 14, 30);
+      doc.text(`User: ${userEmail || 'N/A'}`, 14, 37);
+      doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 44);
+
+      // Summary Box
+      doc.setDrawColor(200);
+      doc.setFillColor(248, 250, 255);
+      doc.rect(14, 50, 182, 30, 'F');
+      
+      doc.setFontSize(10);
+      doc.setTextColor(0);
+      doc.text(`Total BDT Sent:`, 20, 60);
+      doc.setFont(undefined, 'bold');
+      doc.text(`BDT ${Math.round(monthlyStats.bdtSent).toLocaleString()}`, 60, 60);
+      
+      doc.setFont(undefined, 'normal');
+      doc.text(`EUR Collected:`, 20, 68);
+      doc.setFont(undefined, 'bold');
+      doc.text(`EUR ${Math.round(monthlyStats.eurCollected).toLocaleString()}`, 60, 68);
+      
+      doc.setFont(undefined, 'normal');
+      doc.text(`Total Profit:`, 110, 60);
+      doc.setFont(undefined, 'bold');
+      doc.setTextColor(22, 163, 74); // Green
+      doc.text(`EUR ${Math.round(monthlyStats.profitEur).toLocaleString()}`, 140, 60);
+
+      doc.setTextColor(0);
+      doc.setFont(undefined, 'normal');
+      doc.text(`Total Expenses:`, 110, 68);
+      doc.setFont(undefined, 'bold');
+      doc.setTextColor(220, 38, 38); // Red
+      doc.text(`EUR ${Math.round(monthlyStats.expensesEur).toLocaleString()}`, 140, 68);
+      
+      doc.setTextColor(0);
+      doc.setFont(undefined, 'normal');
+      doc.text(`Total Transactions:`, 110, 76);
+      doc.setFont(undefined, 'bold');
+      doc.text(`${monthlyStats.txCount}`, 145, 76);
+
+      const tableData = monthlyStats.filtered.map(tx => [
+        new Date(tx.date).toLocaleDateString('en-GB'),
+        tx.type,
+        tx.eurAmount.toFixed(2),
+        tx.rate.toFixed(2),
+        Math.round(tx.bdtAmount).toString(),
+        tx.profitEur ? tx.profitEur.toFixed(2) : '0.00',
+        tx.customerPhoneNumber || '-'
+      ]);
+
+      autoTable(doc, {
+        head: [['Date', 'Type', 'EUR', 'Rate', 'BDT', 'Profit', 'Phone']],
+        body: tableData,
+        startY: 90,
+        theme: 'striped',
+        headStyles: { fillColor: [37, 99, 235], fontSize: 9 },
+        styles: { fontSize: 8 },
+        columnStyles: {
+          5: { textColor: [22, 163, 74], fontStyle: 'bold' } // Profit column
+        }
+      });
+
+      doc.save(`Monthly_Report_${monthName}_${selectedYear}.pdf`);
+    } catch (error) {
+      console.error('Monthly PDF Error:', error);
+      alert('পিডিএফ তৈরি করতে সমস্যা হয়েছে।');
+    }
+  };
 
   return (
     <div className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm overflow-hidden">
@@ -85,9 +181,30 @@ const MonthlyReport: React.FC<MonthlyReportProps> = ({ transactions }) => {
           </div>
         </div>
 
-        <div className="flex justify-between items-center px-2 pt-2">
-          <span className="text-[10px] font-bold text-gray-400 uppercase">মোট লেনদেন:</span>
-          <span className="text-xs font-black text-gray-700">{monthlyStats.txCount} বার</span>
+        {monthlyStats.expensesEur > 0 && (
+          <div className="bg-red-50/50 p-4 rounded-2xl border border-red-100">
+            <span className="block text-[9px] font-black text-red-500 uppercase tracking-widest mb-1">এ মাসের মোট খরচ</span>
+            <div className="flex justify-between items-baseline">
+              <span className="text-xl font-black text-red-600">€{Math.round(monthlyStats.expensesEur).toLocaleString()}</span>
+              {monthlyStats.expensesBdt > 0 && (
+                <span className="text-xs font-bold text-red-400">৳{Math.round(monthlyStats.expensesBdt).toLocaleString()}</span>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div className="flex justify-between items-center px-2 pt-2 gap-4">
+          <div className="flex flex-col">
+            <span className="text-[10px] font-bold text-gray-400 uppercase">মোট লেনদেন:</span>
+            <span className="text-xs font-black text-gray-700">{monthlyStats.txCount} বার</span>
+          </div>
+          <button 
+            onClick={downloadPDF}
+            disabled={monthlyStats.txCount === 0}
+            className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-purple-700 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-purple-200"
+          >
+            <Download className="w-3 h-3" /> PDF ডাউনলোড
+          </button>
         </div>
       </div>
     </div>
