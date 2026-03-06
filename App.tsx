@@ -10,6 +10,12 @@ import DailyDetails from './components/DailyDetails.tsx';
 import MonthlyReport from './components/MonthlyReport.tsx';
 import Auth from './components/Auth.tsx';
 import { supabase } from './services/supabase';
+import html2canvas from 'html2canvas';
+import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import Receipt from './components/Receipt.tsx';
+import { Download, FileText, BarChart3, Users, Bell } from 'lucide-react';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -28,6 +34,8 @@ const App: React.FC = () => {
   
   const [profitTimeRange, setProfitTimeRange] = useState<'today' | '7days' | '30days' | 'total'>('total');
   const [selectedReportDate, setSelectedReportDate] = useState(new Date().toISOString().split('T')[0]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterType, setFilterType] = useState<'ALL' | TransactionType>('ALL');
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -161,7 +169,7 @@ const App: React.FC = () => {
           periodTotalBuyBdt += tx.bdtAmount;
           periodTotalBuyEur += tx.eurAmount;
         }
-      } else {
+      } else if (tx.type === TransactionType.SELL) {
         currentBdt -= tx.bdtAmount; 
         currentEur += tx.eurAmount;
         totalCustomerEur += tx.eurAmount; 
@@ -180,9 +188,23 @@ const App: React.FC = () => {
           periodProfitEur += pEur;
           periodProfitBdt += pBdt;
         }
+      } else if (tx.type === TransactionType.EXPENSE) {
+        // Expenses reduce balances. Assuming expenses are recorded in EUR.
+        currentEur -= tx.eurAmount;
+        // If BDT was also recorded for the expense
+        currentBdt -= tx.bdtAmount;
       }
       return { ...tx, profitEur: pEur, profitBdt: pBdt };
     }).reverse();
+
+    // Apply search and filter
+    const filteredTransactions = processedTransactions.filter(tx => {
+      const matchesSearch = 
+        (tx.customerPhoneNumber?.includes(searchQuery)) || 
+        (tx.note?.toLowerCase().includes(searchQuery.toLowerCase()));
+      const matchesType = filterType === 'ALL' || tx.type === filterType;
+      return matchesSearch && matchesType;
+    });
 
     // Determine what to show in the dashboard cards
     const displayAvgBuyingRate = (profitTimeRange !== 'total' && periodTotalBuyEur > 0) 
@@ -193,7 +215,8 @@ const App: React.FC = () => {
     const displayTotalInvestmentEur = profitTimeRange === 'total' ? globalTotalBuyEur : periodTotalBuyEur;
 
     return {
-      transactions: processedTransactions,
+      transactions: filteredTransactions,
+      allTransactions: processedTransactions, // Keep all for reports if needed
       summary: {
         totalInvestmentEur: displayTotalInvestmentEur,
         totalInvestmentBdt: displayTotalInvestmentBdt,
@@ -324,6 +347,102 @@ const App: React.FC = () => {
     alert('মেসেজ কপি করা হয়েছে।');
   };
 
+  const exportToExcel = () => {
+    const data = transactions.map(tx => ({
+      Date: new Date(tx.date).toLocaleDateString(),
+      Type: tx.type,
+      EUR: tx.eurAmount,
+      Rate: tx.rate,
+      BDT: tx.bdtAmount,
+      Profit_EUR: tx.profitEur,
+      Phone: tx.customerPhoneNumber || '',
+      Note: tx.note || ''
+    }));
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Transactions");
+    XLSX.writeFile(wb, `Remittance_Ledger_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
+  const exportToPDF = () => {
+    try {
+      const doc = new jsPDF();
+      doc.setFontSize(18);
+      doc.text("Remittance Ledger Report", 14, 20);
+      doc.setFontSize(10);
+      doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 30);
+      doc.text(`User: ${currentUser?.email}`, 14, 35);
+
+      const tableData = summary.transactions.map(tx => [
+        new Date(tx.date).toLocaleDateString('en-GB'),
+        tx.type,
+        tx.eurAmount.toFixed(2),
+        tx.rate.toFixed(2),
+        Math.round(tx.bdtAmount).toString(),
+        tx.customerPhoneNumber || ''
+      ]);
+      
+      if (tableData.length === 0) {
+        alert('কোনো লেনদেন নেই।');
+        return;
+      }
+
+      autoTable(doc, {
+        head: [['Date', 'Type', 'EUR', 'Rate', 'BDT', 'Phone']],
+        body: tableData,
+        startY: 45,
+        theme: 'striped',
+        headStyles: { fillColor: [37, 99, 235] }, // Blue color
+        styles: { fontSize: 8 },
+      });
+
+      doc.save(`Remittance_Ledger_${new Date().toISOString().split('T')[0]}.pdf`);
+    } catch (error) {
+      console.error('PDF Export Error:', error);
+      alert('PDF তৈরি করতে সমস্যা হয়েছে।');
+    }
+  };
+
+  const downloadReceipt = async (tx: Transaction) => {
+    const element = document.getElementById(`receipt-${tx.id}`);
+    if (!element) {
+      alert('রিসিট টেমপ্লেট পাওয়া যায়নি। দয়া করে আবার চেষ্টা করুন।');
+      return;
+    }
+    
+    try {
+      // Temporarily move the element to a visible but hidden position for capture
+      const originalStyle = element.style.cssText;
+      element.style.position = 'fixed';
+      element.style.top = '0';
+      element.style.left = '0';
+      element.style.zIndex = '-1';
+      element.style.display = 'block';
+      element.style.visibility = 'visible';
+
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        backgroundColor: '#ffffff',
+        useCORS: true,
+        logging: false,
+      });
+      
+      element.style.cssText = originalStyle;
+      element.style.display = 'none';
+      
+      const image = canvas.toDataURL("image/png");
+      const link = document.createElement('a');
+      link.href = image;
+      link.download = `Receipt_${tx.customerPhoneNumber || 'TX'}_${tx.id.slice(0, 5)}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error('Receipt download error:', error);
+      alert('রিসিট ডাউনলোড করতে সমস্যা হয়েছে।');
+    }
+  };
+
   if (isLoading && !currentUser) {
     return <div className="min-h-screen flex items-center justify-center bg-gray-50"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div></div>;
   }
@@ -351,23 +470,59 @@ const App: React.FC = () => {
           ))}
         </div>
         
-        <Dashboard summary={summary.summary} timeRange={profitTimeRange} onOpenSettings={() => setIsSettingsOpen(true)} />
+        <Dashboard summary={summary.summary} timeRange={profitTimeRange} onOpenSettings={() => setIsSettingsOpen(true)} transactions={summary.transactions} />
         
+        <div className="flex flex-wrap gap-3 justify-center md:justify-start">
+          <button onClick={exportToExcel} className="flex items-center gap-2 px-4 py-2 bg-green-50 text-green-700 rounded-xl text-[10px] font-black uppercase tracking-widest border border-green-100 hover:bg-green-100 transition">
+            <Download className="w-3 h-3" /> Excel ডাউনলোড
+          </button>
+          <button onClick={exportToPDF} className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-700 rounded-xl text-[10px] font-black uppercase tracking-widest border border-red-100 hover:bg-red-100 transition">
+            <FileText className="w-3 h-3" /> PDF রিপোর্ট
+          </button>
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-8">
             <div className="bg-white rounded-[32px] shadow-sm border border-gray-100 overflow-hidden">
-              <div className="px-8 py-6 border-b border-gray-50 flex justify-between items-center bg-white/80 backdrop-blur-md sticky top-0 z-10">
-                <h2 className="font-black text-gray-800 uppercase text-xs tracking-widest flex items-center gap-2">
-                   <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-                   লেনদেন সমূহ
-                </h2>
-                <span className="bg-blue-50 text-blue-600 text-[10px] font-black px-4 py-1.5 rounded-full uppercase tracking-tighter shadow-inner">{summary.transactions.length} টি রেকর্ড</span>
+              <div className="px-8 py-6 border-b border-gray-50 bg-white/80 backdrop-blur-md sticky top-0 z-10 space-y-4">
+                <div className="flex justify-between items-center">
+                  <h2 className="font-black text-gray-800 uppercase text-xs tracking-widest flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                    লেনদেন সমূহ
+                  </h2>
+                  <span className="bg-blue-50 text-blue-600 text-[10px] font-black px-4 py-1.5 rounded-full uppercase tracking-tighter shadow-inner">{summary.transactions.length} টি রেকর্ড</span>
+                </div>
+                
+                <div className="flex flex-col md:flex-row gap-3">
+                  <div className="relative flex-1">
+                    <input 
+                      type="text" 
+                      placeholder="ফোন বা নোট দিয়ে খুঁজুন..." 
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-100 rounded-xl text-xs focus:outline-none focus:border-blue-300 transition"
+                    />
+                    <svg className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                  </div>
+                  <div className="flex bg-gray-50 p-1 rounded-xl border border-gray-100">
+                    {(['ALL', TransactionType.BUY, TransactionType.SELL] as const).map((type) => (
+                      <button 
+                        key={type} 
+                        onClick={() => setFilterType(type)}
+                        className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all ${filterType === type ? 'bg-white shadow-sm text-blue-600' : 'text-gray-400'}`}
+                      >
+                        {type === 'ALL' ? 'সব' : type}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
               <TransactionList 
                 transactions={summary.transactions} 
                 onDelete={deleteTransaction} 
                 onShare={sendToWhatsApp} 
                 onCopy={handleCopy} 
+                onDownloadReceipt={downloadReceipt}
                 avgBuyingRate={summary.summary.avgBuyingRate} 
               />
             </div>
@@ -379,6 +534,13 @@ const App: React.FC = () => {
             <ProfitAdvisor summary={summary.summary} />
           </div>
         </div>
+
+        {/* Hidden Receipt Templates for generation */}
+        <div className="fixed left-[-9999px] top-[-9999px] opacity-0 pointer-events-none">
+          {summary.transactions.map(tx => (
+            <Receipt key={tx.id} transaction={tx} businessName="রেমিটেন্স লেজার" userEmail={currentUser?.email || ''} />
+          ))}
+        </div>
       </main>
 
       <button onClick={() => setIsFormOpen(true)} className="fixed bottom-6 right-6 bg-blue-600 text-white p-5 rounded-[28px] shadow-2xl shadow-blue-300 hover:bg-blue-700 active:scale-90 transition-all z-40 group border-4 border-white"><svg className="w-8 h-8 group-hover:rotate-90 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 4v16m8-8H4" /></svg></button>
@@ -387,7 +549,7 @@ const App: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setIsFormOpen(false)}></div>
           <div className="relative w-full max-w-lg animate-in fade-in zoom-in duration-200">
-            <TransactionForm onSubmit={addTransaction} avgBuyingRate={summary.summary.avgBuyingRate} />
+            <TransactionForm onSubmit={addTransaction} avgBuyingRate={summary.summary.avgBuyingRate} transactions={summary.transactions} />
           </div>
         </div>
       )}

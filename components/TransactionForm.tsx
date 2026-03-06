@@ -5,11 +5,19 @@ import { TransactionType, Transaction } from '../types.ts';
 interface TransactionFormProps {
   onSubmit: (tx: Omit<Transaction, 'id' | 'date' | 'profitEur' | 'profitBdt'>) => void;
   avgBuyingRate: number;
+  transactions: Transaction[];
 }
 
-const TransactionForm: React.FC<TransactionFormProps> = ({ onSubmit, avgBuyingRate }) => {
+const TransactionForm: React.FC<TransactionFormProps> = ({ onSubmit, avgBuyingRate, transactions }) => {
   const [type, setType] = useState<TransactionType>(TransactionType.BUY);
   const [inputMode, setInputMode] = useState<'EUR' | 'BDT'>('EUR');
+  
+  // Get unique customers from recent transactions
+  const frequentCustomers = Array.from(new Set(
+    transactions
+      .filter(tx => tx.customerPhoneNumber)
+      .map(tx => tx.customerPhoneNumber)
+  )).slice(0, 5);
   
   // States for inputs
   const [eurInput, setEurInput] = useState(''); 
@@ -39,6 +47,15 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onSubmit, avgBuyingRa
   useEffect(() => {
     const r = parseFloat(rate) || 0;
     const currentFee = parseFloat(cashOutFee) || 0;
+
+    if (type === TransactionType.EXPENSE) {
+      const eur = parseFloat(eurInput) || 0;
+      const bdt = parseFloat(bdtInput) || 0;
+      setCalculatedTotalEur(eur);
+      setCalculatedBdt(bdt);
+      setBonusAmount(0);
+      return;
+    }
 
     if (type === TransactionType.SELL) {
       setBonusAmount(0);
@@ -127,9 +144,11 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onSubmit, avgBuyingRa
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const finalEur = calculatedTotalEur;
-    const finalRate = parseFloat(rate);
-    if (!finalEur || !finalRate) return;
+    const finalEur = type === TransactionType.EXPENSE ? (parseFloat(eurInput) || 0) : calculatedTotalEur;
+    const finalRate = type === TransactionType.EXPENSE ? 1 : parseFloat(rate);
+    
+    if (type !== TransactionType.EXPENSE && (!finalEur || !finalRate)) return;
+    if (type === TransactionType.EXPENSE && !eurInput && !bdtInput) return;
 
     onSubmit({
       type,
@@ -139,7 +158,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onSubmit, avgBuyingRa
       cashOutFee: type === TransactionType.SELL ? (parseFloat(cashOutFee) || 0) : (parseFloat(transferFee) || 0),
       note: note || (type === TransactionType.BUY ? 
         (inputMode === 'BDT' ? `ইনভেস্ট (২.৫% কর্তন শেষে)` : `ইনভেস্ট (+২.৫% বোনাস)`) : 
-        `রেমিটেন্স: ৳${Math.round(calculatedBdt)}`),
+        (type === TransactionType.EXPENSE ? 'ব্যবসায়িক খরচ' : `রেমিটেন্স: ৳${Math.round(calculatedBdt)}`)),
       customerPhoneNumber: type === TransactionType.SELL ? phoneNumber : undefined
     });
 
@@ -171,6 +190,14 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onSubmit, avgBuyingRa
         >
           কাস্টমার (Sell)
         </button>
+        <button
+          onClick={() => { setType(TransactionType.EXPENSE); setEurInput(''); setBdtInput(''); setRate('1'); }}
+          className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${
+            type === TransactionType.EXPENSE ? 'bg-white shadow-sm text-red-600' : 'text-gray-500'
+          }`}
+        >
+          খরচ (Expense)
+        </button>
       </div>
 
       <div className="flex mb-5 gap-2 justify-center">
@@ -189,44 +216,87 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onSubmit, avgBuyingRa
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-5">
-        <div>
-          <label className="block text-xs font-black text-gray-400 uppercase mb-2 tracking-wider">রেট (Rate)</label>
-          <div className="relative">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">৳</span>
-            <input type="number" step="any" required value={rate} onChange={(e) => setRate(e.target.value)} className="w-full pl-10 p-4 bg-gray-50 border-0 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition font-black text-xl text-orange-600" placeholder="0.00" />
+        {type !== TransactionType.EXPENSE && (
+          <div>
+            <label className="block text-xs font-black text-gray-400 uppercase mb-2 tracking-wider">রেট (Rate)</label>
+            <div className="relative">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">৳</span>
+              <input type="number" step="any" required value={rate} onChange={(e) => setRate(e.target.value)} className="w-full pl-10 p-4 bg-gray-50 border-0 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition font-black text-xl text-orange-600" placeholder="0.00" />
+            </div>
           </div>
-        </div>
+        )}
 
         {type === TransactionType.SELL && (
           <div>
             <label className="block text-xs font-black text-gray-400 uppercase mb-2 tracking-wider">কাস্টমারের ফোন নাম্বার</label>
-            <div className="relative">
+            <div className="relative mb-3">
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">📞</span>
               <input type="tel" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} className="w-full pl-10 p-4 bg-gray-50 border-0 rounded-2xl focus:ring-2 focus:ring-green-500 outline-none transition font-bold text-gray-800" placeholder="যেমন: ০১৮৭৪৬..." />
             </div>
+            {frequentCustomers.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-4">
+                <span className="text-[9px] font-bold text-gray-400 uppercase w-full mb-1">সাম্প্রতিক কাস্টমার:</span>
+                {frequentCustomers.map(phone => (
+                  <button 
+                    key={phone} 
+                    type="button" 
+                    onClick={() => setPhoneNumber(phone || '')}
+                    className="px-3 py-1 bg-gray-100 hover:bg-green-50 hover:text-green-600 rounded-full text-[10px] font-bold text-gray-500 transition"
+                  >
+                    {phone}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
-        {inputMode === 'EUR' && (
-          <div>
-            <label className="block text-xs font-black text-gray-400 uppercase mb-2 tracking-wider">{type === TransactionType.BUY ? 'কত ইউরো ইনভেস্ট করেছেন?' : 'কাস্টমার কত ইউরো দিবে?'}</label>
-            <div className="relative">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">€</span>
-              <input type="number" required value={eurInput} onChange={(e) => setEurInput(e.target.value)} className="w-full pl-10 p-4 bg-gray-50 border-0 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition font-black text-xl text-gray-800" placeholder="যেমন: ১০০" />
+        {type === TransactionType.EXPENSE ? (
+          <div className="space-y-5">
+            <div>
+              <label className="block text-xs font-black text-gray-400 uppercase mb-2 tracking-wider">খরচের পরিমাণ (EUR)</label>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">€</span>
+                <input type="number" value={eurInput} onChange={(e) => setEurInput(e.target.value)} className="w-full pl-10 p-4 bg-gray-50 border-0 rounded-2xl focus:ring-2 focus:ring-red-500 outline-none transition font-black text-xl text-red-600" placeholder="0" />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-black text-gray-400 uppercase mb-2 tracking-wider">খরচের পরিমাণ (BDT)</label>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">৳</span>
+                <input type="number" value={bdtInput} onChange={(e) => setBdtInput(e.target.value)} className="w-full pl-10 p-4 bg-gray-50 border-0 rounded-2xl focus:ring-2 focus:ring-red-500 outline-none transition font-black text-xl text-red-600" placeholder="0" />
+              </div>
             </div>
           </div>
+        ) : (
+          <>
+            {inputMode === 'EUR' && (
+              <div>
+                <label className="block text-xs font-black text-gray-400 uppercase mb-2 tracking-wider">{type === TransactionType.BUY ? 'কত ইউরো ইনভেস্ট করেছেন?' : 'কাস্টমার কত ইউরো দিবে?'}</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">€</span>
+                  <input type="number" required value={eurInput} onChange={(e) => setEurInput(e.target.value)} className="w-full pl-10 p-4 bg-gray-50 border-0 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition font-black text-xl text-gray-800" placeholder="যেমন: ১০০" />
+                </div>
+              </div>
+            )}
+
+            {inputMode === 'BDT' && (
+              <div>
+                <label className="block text-xs font-black text-gray-400 uppercase mb-2 tracking-wider">{type === TransactionType.BUY ? 'বাংলাদেশে কত টাকা জমা করেছেন?' : 'বাংলাদেশে কত টাকা পাঠাবে?'}</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">৳</span>
+                  <input type="number" required value={bdtInput} onChange={(e) => setBdtInput(e.target.value)} className="w-full pl-10 p-4 bg-gray-50 border-0 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition font-black text-xl text-gray-800" placeholder="যেমন: ৫০০০০" />
+                </div>
+                {type === TransactionType.BUY && <p className="text-[9px] text-blue-500 mt-2 ml-2 font-bold">* এই টাকা থেকে অটো ২.৫% চার্জ বাদ দিয়ে ইউরো হিসাব হবে।</p>}
+              </div>
+            )}
+          </>
         )}
 
-        {inputMode === 'BDT' && (
-          <div>
-            <label className="block text-xs font-black text-gray-400 uppercase mb-2 tracking-wider">{type === TransactionType.BUY ? 'বাংলাদেশে কত টাকা জমা করেছেন?' : 'বাংলাদেশে কত টাকা পাঠাবে?'}</label>
-            <div className="relative">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">৳</span>
-              <input type="number" required value={bdtInput} onChange={(e) => setBdtInput(e.target.value)} className="w-full pl-10 p-4 bg-gray-50 border-0 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition font-black text-xl text-gray-800" placeholder="যেমন: ৫০০০০" />
-            </div>
-            {type === TransactionType.BUY && <p className="text-[9px] text-blue-500 mt-2 ml-2 font-bold">* এই টাকা থেকে অটো ২.৫% চার্জ বাদ দিয়ে ইউরো হিসাব হবে।</p>}
-          </div>
-        )}
+        <div>
+          <label className="block text-xs font-black text-gray-400 uppercase mb-2 tracking-wider">নোট (ঐচ্ছিক)</label>
+          <input type="text" value={note} onChange={(e) => setNote(e.target.value)} className="w-full p-4 bg-gray-50 border-0 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition font-bold text-gray-800" placeholder="যেমন: অফিস ভাড়া, ইন্টারনেট..." />
+        </div>
 
         {type === TransactionType.SELL ? (
           <div>

@@ -1,14 +1,16 @@
 
 import React from 'react';
-import { BusinessSummary } from '../types';
+import { BusinessSummary, Transaction } from '../types';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 
 interface DashboardProps {
   summary: BusinessSummary & { periodProfitEur: number, periodProfitBdt: number };
   timeRange: 'today' | '7days' | '30days' | 'total';
   onOpenSettings: () => void;
+  transactions: Transaction[];
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ summary, timeRange, onOpenSettings }) => {
+const Dashboard: React.FC<DashboardProps> = ({ summary, timeRange, onOpenSettings, transactions }) => {
   const rangeLabels = {
     today: 'আজকের লাভ',
     '7days': 'গত ৭ দিনের লাভ',
@@ -17,6 +19,15 @@ const Dashboard: React.FC<DashboardProps> = ({ summary, timeRange, onOpenSetting
   };
 
   const isBdtNegative = summary.currentBdtBalance < 0;
+
+  // Prepare chart data
+  const chartData = transactions
+    .slice(0, 15)
+    .reverse()
+    .map(tx => ({
+      date: new Date(tx.date).toLocaleDateString('bn-BD', { day: 'numeric', month: 'short' }),
+      profit: Math.round(tx.profitEur)
+    }));
 
   return (
     <div className="space-y-6">
@@ -84,6 +95,36 @@ const Dashboard: React.FC<DashboardProps> = ({ summary, timeRange, onOpenSetting
               <span className="text-[10px] font-black text-orange-400 uppercase tracking-tighter">ওপেনিং: €{Math.round(summary.openingBalanceEur).toLocaleString()}</span>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Analytics Chart */}
+      <div className="bg-white p-8 rounded-[32px] shadow-sm border border-gray-100">
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+            লাভের ট্রেন্ড (ইউরো)
+          </h3>
+        </div>
+        <div className="h-[200px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={chartData}>
+              <defs>
+                <linearGradient id="colorProfit" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1}/>
+                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+              <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#94a3b8'}} />
+              <YAxis hide />
+              <Tooltip 
+                contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                labelStyle={{ fontWeight: 'bold', marginBottom: '4px' }}
+              />
+              <Area type="monotone" dataKey="profit" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorProfit)" />
+            </AreaChart>
+          </ResponsiveContainer>
         </div>
       </div>
 

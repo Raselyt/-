@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BusinessSummary } from '../types';
 import { getBusinessAdvice } from '../services/geminiService';
+import { Bell } from 'lucide-react';
 
 interface ProfitAdvisorProps {
   summary: BusinessSummary;
@@ -11,6 +12,8 @@ const ProfitAdvisor: React.FC<ProfitAdvisorProps> = ({ summary }) => {
   const [marketRate, setMarketRate] = useState<number | null>(null);
   const [aiSuggestedRate, setAiSuggestedRate] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
+  const [targetRate, setTargetRate] = useState<string>('');
+  const [isAlertSet, setIsAlertSet] = useState(false);
 
   // Fallback Profit Margin Logic: Suggest giving customer 3.0 Taka less than buying rate
   const targetProfitBdt = 3.0;
@@ -34,6 +37,13 @@ const ProfitAdvisor: React.FC<ProfitAdvisorProps> = ({ summary }) => {
         setAdvice(result.advice);
         setMarketRate(result.marketRate);
         setAiSuggestedRate(result.suggestedRate);
+        
+        // Check for alert
+        if (isAlertSet && result.marketRate && parseFloat(targetRate) > 0) {
+          if (result.marketRate >= parseFloat(targetRate)) {
+            alert(`🔔 রেট অ্যালার্ট! বর্তমান বাজার দর (৳${result.marketRate.toFixed(2)}) আপনার টার্গেট রেট (৳${targetRate}) এ পৌঁছেছে!`);
+          }
+        }
       }
     } catch (e) {
       setAdvice("সার্ভারে সমস্যা হচ্ছে, অনুগ্রহ করে ম্যানুয়ালি রেট যাচাই করুন।");
@@ -66,6 +76,30 @@ const ProfitAdvisor: React.FC<ProfitAdvisorProps> = ({ summary }) => {
         <p className="text-xs text-blue-600 font-medium">প্রথমে কিছু ইনভেস্টমেন্ট (Buy) অ্যাড করুন তাহলেই AI সঠিক রেট সাজেস্ট করতে পারবে।</p>
       ) : (
         <div className="space-y-4">
+          {/* Rate Alert Setting */}
+          <div className="bg-white/60 p-4 rounded-xl border border-white">
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-[10px] font-bold text-blue-700 uppercase flex items-center gap-1">
+                <Bell className="w-3 h-3" /> রেট অ্যালার্ট সেট করুন
+              </span>
+              <button 
+                onClick={() => setIsAlertSet(!isAlertSet)} 
+                className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase transition ${isAlertSet ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'}`}
+              >
+                {isAlertSet ? 'অ্যাক্টিভ' : 'অফ'}
+              </button>
+            </div>
+            <div className="flex gap-2">
+              <input 
+                type="number" 
+                value={targetRate} 
+                onChange={(e) => setTargetRate(e.target.value)}
+                placeholder="টার্গেট রেট (যেমন: ১৪৬)"
+                className="flex-1 bg-white border-0 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:ring-1 focus:ring-blue-300"
+              />
+            </div>
+          </div>
+
           <div className="bg-white/60 p-4 rounded-xl border border-white">
             <p className="text-xs text-blue-800 leading-relaxed font-semibold whitespace-pre-line">
               {advice || 'আপনার ডেটা বিশ্লেষণ করা হচ্ছে...'}

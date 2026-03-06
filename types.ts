@@ -1,7 +1,8 @@
 
 export enum TransactionType {
   BUY = 'BUY', // EUR -> BDT Investment
-  SELL = 'SELL' // Customer Sent BDT (Profit calculation)
+  SELL = 'SELL', // Customer Sent BDT (Profit calculation)
+  EXPENSE = 'EXPENSE' // Business Expenses
 }
 
 export interface User {
