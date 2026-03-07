@@ -8,10 +8,11 @@ interface TransactionListProps {
   onShare: (tx: Transaction) => void;
   onCopy: (tx: Transaction) => void;
   onDownloadReceipt: (tx: Transaction) => void;
+  onDownloadPDF: (tx: Transaction) => void;
   avgBuyingRate: number;
 }
 
-const TransactionList: React.FC<TransactionListProps> = ({ transactions, onDelete, onShare, onCopy, onDownloadReceipt, avgBuyingRate }) => {
+const TransactionList: React.FC<TransactionListProps> = ({ transactions, onDelete, onShare, onCopy, onDownloadReceipt, onDownloadPDF, avgBuyingRate }) => {
   if (transactions.length === 0) {
     return (
       <div className="text-center py-16 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
@@ -64,9 +65,14 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, onDelet
                 </td>
                 <td className="py-4 px-2 text-right">
                   <div className="flex gap-1 justify-end">
-                    <button title="রিসিট ডাউনলোড করুন" onClick={() => onDownloadReceipt(tx)} className="p-1.5 text-orange-500 hover:bg-orange-50 rounded transition">
+                    <button title="রিসিট (ছবি) ডাউনলোড" onClick={() => onDownloadReceipt(tx)} className="p-1.5 text-orange-500 hover:bg-orange-50 rounded transition">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                    </button>
+                    <button title="রিসিট (PDF) ডাউনলোড" onClick={() => onDownloadPDF(tx)} className="p-1.5 text-red-500 hover:bg-red-50 rounded transition">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                       </svg>
                     </button>
                     {tx.type === TransactionType.SELL && (

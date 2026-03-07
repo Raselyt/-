@@ -12,7 +12,7 @@ import Auth from './components/Auth.tsx';
 import { supabase } from './services/supabase';
 import html2canvas from 'html2canvas';
 import * as XLSX from 'xlsx';
-import jsPDF from 'jspdf';
+import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import Receipt from './components/Receipt.tsx';
 import { Download, FileText, BarChart3, Users, Bell } from 'lucide-react';
@@ -411,7 +411,6 @@ const App: React.FC = () => {
     }
     
     try {
-      // Temporarily move the element to a visible position for capture
       const originalStyle = element.style.cssText;
       element.style.position = 'fixed';
       element.style.top = '0';
@@ -420,37 +419,83 @@ const App: React.FC = () => {
       element.style.display = 'block';
       element.style.visibility = 'visible';
       element.style.opacity = '1';
-      element.style.pointerEvents = 'none'; // Avoid blocking user interaction
+      element.style.pointerEvents = 'none';
       element.style.transform = 'none';
 
-      // Give a tiny bit of time for styles to apply and browser to paint
-      await new Promise(resolve => setTimeout(resolve, 150));
+      await new Promise(resolve => setTimeout(resolve, 200));
 
       const canvas = await html2canvas(element, {
-        scale: 2,
+        scale: 3,
         backgroundColor: '#ffffff',
         useCORS: true,
         logging: false,
         allowTaint: true,
         scrollX: 0,
         scrollY: 0,
-        windowWidth: document.documentElement.offsetWidth,
-        windowHeight: document.documentElement.offsetHeight,
+        windowWidth: element.offsetWidth,
+        windowHeight: element.offsetHeight,
       });
       
       element.style.cssText = originalStyle;
-      element.style.display = 'none';
       
-      const image = canvas.toDataURL("image/png");
-      const link = document.createElement('a');
-      link.href = image;
-      link.download = `Receipt_${tx.customerPhoneNumber || 'TX'}_${tx.id.slice(0, 5)}.png`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          alert('ছবি তৈরি করতে সমস্যা হয়েছে');
+          return;
+        }
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `Receipt_${tx.customerPhoneNumber || 'TX'}_${tx.id.slice(0, 5)}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(url), 100);
+      }, 'image/png', 1.0);
+
     } catch (error) {
       console.error('Receipt download error:', error);
       alert('রিসিট ডাউনলোড করতে সমস্যা হয়েছে।');
+    }
+  };
+
+  const downloadReceiptPDF = async (tx: Transaction) => {
+    const element = document.getElementById(`receipt-${tx.id}`);
+    if (!element) return;
+
+    try {
+      const originalStyle = element.style.cssText;
+      element.style.position = 'fixed';
+      element.style.top = '0';
+      element.style.left = '0';
+      element.style.zIndex = '99999';
+      element.style.display = 'block';
+      element.style.visibility = 'visible';
+      element.style.opacity = '1';
+      element.style.transform = 'none';
+
+      await new Promise(resolve => setTimeout(resolve, 200));
+
+      const canvas = await html2canvas(element, {
+        scale: 3,
+        backgroundColor: '#ffffff',
+        useCORS: true,
+      });
+
+      element.style.cssText = originalStyle;
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'px',
+        format: [canvas.width / 3, canvas.height / 3]
+      });
+
+      pdf.addImage(imgData, 'PNG', 0, 0, canvas.width / 3, canvas.height / 3);
+      pdf.save(`Receipt_${tx.customerPhoneNumber || 'TX'}.pdf`);
+    } catch (error) {
+      console.error('PDF Error:', error);
+      alert('PDF তৈরি করতে সমস্যা হয়েছে');
     }
   };
 
@@ -534,6 +579,7 @@ const App: React.FC = () => {
                 onShare={sendToWhatsApp} 
                 onCopy={handleCopy} 
                 onDownloadReceipt={downloadReceipt}
+                onDownloadPDF={downloadReceiptPDF}
                 avgBuyingRate={summary.summary.avgBuyingRate} 
               />
             </div>
