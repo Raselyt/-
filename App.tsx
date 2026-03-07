@@ -411,20 +411,31 @@ const App: React.FC = () => {
     }
     
     try {
-      // Temporarily move the element to a visible but hidden position for capture
+      // Temporarily move the element to a visible position for capture
       const originalStyle = element.style.cssText;
       element.style.position = 'fixed';
       element.style.top = '0';
       element.style.left = '0';
-      element.style.zIndex = '-1';
+      element.style.zIndex = '99999';
       element.style.display = 'block';
       element.style.visibility = 'visible';
+      element.style.opacity = '1';
+      element.style.pointerEvents = 'none'; // Avoid blocking user interaction
+      element.style.transform = 'none';
+
+      // Give a tiny bit of time for styles to apply and browser to paint
+      await new Promise(resolve => setTimeout(resolve, 150));
 
       const canvas = await html2canvas(element, {
         scale: 2,
         backgroundColor: '#ffffff',
         useCORS: true,
         logging: false,
+        allowTaint: true,
+        scrollX: 0,
+        scrollY: 0,
+        windowWidth: document.documentElement.offsetWidth,
+        windowHeight: document.documentElement.offsetHeight,
       });
       
       element.style.cssText = originalStyle;
@@ -536,7 +547,7 @@ const App: React.FC = () => {
         </div>
 
         {/* Hidden Receipt Templates for generation */}
-        <div className="fixed left-[-9999px] top-[-9999px] opacity-0 pointer-events-none">
+        <div className="fixed left-[-9999px] top-0 pointer-events-none overflow-hidden h-0 w-0">
           {summary.transactions.map(tx => (
             <Receipt key={tx.id} transaction={tx} businessName="রেমিটেন্স লেজার" userEmail={currentUser?.email || ''} />
           ))}
