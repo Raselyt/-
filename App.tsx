@@ -136,19 +136,26 @@ const App: React.FC = () => {
     const todayTimestamp = now.getTime();
     const oneDay = 24 * 60 * 60 * 1000;
 
-    // 1. Calculate Global Average Buying Rate (needed for profit calculation of all transactions)
-    transactions.filter(tx => tx.type === TransactionType.BUY).forEach(tx => {
-      globalTotalBuyBdt += tx.bdtAmount;
-      globalTotalBuyEur += tx.eurAmount;
+    // Calculate overall average as a strict fallback for sells that happen before any buys
+    let overallTotalBuyBdt = 0;
+    let overallTotalBuyEur = 0;
+    transactions.forEach(tx => {
+      if (tx.type === TransactionType.BUY) {
+        overallTotalBuyBdt += tx.bdtAmount;
+        overallTotalBuyEur += tx.eurAmount;
+      }
     });
-    const globalAvgBuyingRate = globalTotalBuyEur > 0 ? globalTotalBuyBdt / globalTotalBuyEur : 0;
+    const overallAvgBuyingRate = overallTotalBuyEur > 0 ? overallTotalBuyBdt / overallTotalBuyEur : 0;
 
-    // 2. Sort and process transactions
+    // 1. Sort transactions chronologically to track the latest buying rate
     const sortedTxs = [...transactions].sort((a, b) => a.date - b.date);
+
+    let latestBuyingRate = 0;
 
     const processedTransactions = sortedTxs.map(tx => {
       let pEur = 0;
       let pBdt = 0;
+      let usedRate = 0;
 
       const isToday = tx.date >= todayTimestamp;
       const isLast7Days = (Date.now() - tx.date) <= (7 * oneDay);
@@ -165,6 +172,12 @@ const App: React.FC = () => {
         currentEur -= tx.eurAmount;
         totalCustomerEur -= tx.eurAmount; 
         
+        globalTotalBuyBdt += tx.bdtAmount;
+        globalTotalBuyEur += tx.eurAmount;
+        
+        // Update the latest buying rate
+        latestBuyingRate = tx.eurAmount > 0 ? tx.bdtAmount / tx.eurAmount : 0;
+        
         if (isInPeriod) {
           periodTotalBuyBdt += tx.bdtAmount;
           periodTotalBuyEur += tx.eurAmount;
@@ -174,11 +187,15 @@ const App: React.FC = () => {
         currentEur += tx.eurAmount;
         totalCustomerEur += tx.eurAmount; 
 
-        // Profit is always calculated based on the global cost basis (Average Buying Rate)
-        if (globalAvgBuyingRate > 0) {
-          const costOfBdtInEur = tx.bdtAmount / globalAvgBuyingRate;
+        // Profit is calculated based on the latest buying rate at the time of sale
+        // Fallback to overall average if no prior buy exists
+        const rateToUse = latestBuyingRate > 0 ? latestBuyingRate : overallAvgBuyingRate;
+        usedRate = rateToUse;
+
+        if (rateToUse > 0) {
+          const costOfBdtInEur = tx.bdtAmount / rateToUse;
           pEur = tx.eurAmount - costOfBdtInEur;
-          pBdt = pEur * globalAvgBuyingRate;
+          pBdt = pEur * rateToUse;
         }
 
         totalProfitBdt += pBdt;
@@ -194,7 +211,7 @@ const App: React.FC = () => {
         // If BDT was also recorded for the expense
         currentBdt -= tx.bdtAmount;
       }
-      return { ...tx, profitEur: pEur, profitBdt: pBdt };
+      return { ...tx, profitEur: pEur, profitBdt: pBdt, usedBuyingRate: usedRate };
     }).reverse();
 
     // Apply search and filter
@@ -207,9 +224,9 @@ const App: React.FC = () => {
     });
 
     // Determine what to show in the dashboard cards
-    const displayAvgBuyingRate = (profitTimeRange !== 'total' && periodTotalBuyEur > 0) 
-      ? (periodTotalBuyBdt / periodTotalBuyEur) 
-      : globalAvgBuyingRate;
+    const displayAvgBuyingRate = latestBuyingRate > 0 
+      ? latestBuyingRate 
+      : (globalTotalBuyEur > 0 ? globalTotalBuyBdt / globalTotalBuyEur : 0);
 
     const displayTotalInvestmentBdt = profitTimeRange === 'total' ? globalTotalBuyBdt : periodTotalBuyBdt;
     const displayTotalInvestmentEur = profitTimeRange === 'total' ? globalTotalBuyEur : periodTotalBuyEur;

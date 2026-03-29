@@ -56,10 +56,13 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, onDelet
                   {tx.type === TransactionType.BUY ? (
                     <span className="text-[10px] text-gray-200">—</span>
                   ) : (
-                    <div className="flex flex-col">
+                    <div className="flex flex-col" title={tx.usedBuyingRate ? `কেনা রেট ৳${tx.usedBuyingRate.toFixed(2)} অনুযায়ী হিসাব করা হয়েছে` : ''}>
                       <span className={`text-xs font-black ${tx.profitEur >= 0 ? 'text-green-600' : 'text-red-500'}`}>
                         {tx.profitEur >= 0 ? '+' : ''}€{Math.round(tx.profitEur).toLocaleString()}
                       </span>
+                      {tx.usedBuyingRate && (
+                        <span className="text-[8px] text-gray-400">@ {tx.usedBuyingRate.toFixed(2)}</span>
+                      )}
                     </div>
                   )}
                 </td>

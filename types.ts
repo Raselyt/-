@@ -23,6 +23,7 @@ export interface Transaction {
   cashOutFee: number;
   profitEur: number; // Primary profit metric in EUR
   profitBdt: number; // Secondary for reference
+  usedBuyingRate?: number; // The buying rate used to calculate profit
   note: string;
   customerPhoneNumber?: string; // Optional customer phone for WhatsApp
 }

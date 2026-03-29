@@ -144,9 +144,16 @@ const Dashboard: React.FC<DashboardProps> = ({ summary, timeRange, onOpenSetting
             €{Math.round(summary.totalCustomerEur).toLocaleString()}
           </span>
         </div>
-        <div className="bg-white px-6 py-5 rounded-[24px] border border-gray-100 shadow-sm flex flex-col justify-center">
-          <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">{timeRange === 'total' ? 'গড় কেনা রেট' : 'নির্বাচিত গড় রেট'}</span>
+        <div className="bg-white px-6 py-5 rounded-[24px] border border-gray-100 shadow-sm flex flex-col justify-center relative">
+          <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">{timeRange === 'total' ? 'সর্বশেষ কেনা রেট' : 'নির্বাচিত গড় রেট'}</span>
           <span className="text-xl font-black text-orange-500">৳{summary.avgBuyingRate.toFixed(2)}</span>
+          {summary.avgBuyingRate > 0 && (
+            <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-max">
+              <span className="text-[9px] font-bold text-gray-500 bg-orange-50 px-2 py-0.5 rounded-full border border-orange-100 whitespace-nowrap">
+                বিক্রয় রেট: ৳{(summary.avgBuyingRate - 1.5).toFixed(2)}
+              </span>
+            </div>
+          )}
         </div>
       </div>
     </div>
