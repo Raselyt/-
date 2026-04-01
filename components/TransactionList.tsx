@@ -58,7 +58,7 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, onDelet
                   ) : (
                     <div className="flex flex-col" title={tx.usedBuyingRate ? `কেনা রেট ৳${tx.usedBuyingRate.toFixed(2)} অনুযায়ী হিসাব করা হয়েছে` : ''}>
                       <span className={`text-xs font-black ${tx.profitEur >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                        {tx.profitEur >= 0 ? '+' : ''}€{Math.round(tx.profitEur).toLocaleString()}
+                        {tx.profitEur >= 0 ? '+' : ''}€{tx.profitEur.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
                       {tx.usedBuyingRate && (
                         <span className="text-[8px] text-gray-400">@ {tx.usedBuyingRate.toFixed(2)}</span>

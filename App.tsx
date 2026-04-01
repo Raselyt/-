@@ -253,8 +253,8 @@ const App: React.FC = () => {
 
   const handleUpdateOpeningBalances = async () => {
     if (!currentUser) return;
-    const bdtVal = Math.round(parseFloat(tempOpeningBdt));
-    const eurVal = Math.round(parseFloat(tempOpeningEur));
+    const bdtVal = parseFloat(tempOpeningBdt);
+    const eurVal = parseFloat(tempOpeningEur);
     if (isNaN(bdtVal) || isNaN(eurVal)) { 
       alert('দয়া করে সঠিক সংখ্যা লিখুন।'); 
       return; 

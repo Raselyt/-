@@ -93,7 +93,7 @@ const MonthlyReport: React.FC<MonthlyReportProps> = ({ transactions, userEmail }
       doc.text(`Total Profit:`, 110, 60);
       doc.setFont(undefined, 'bold');
       doc.setTextColor(22, 163, 74); // Green
-      doc.text(`EUR ${Math.round(monthlyStats.profitEur).toLocaleString()}`, 140, 60);
+      doc.text(`EUR ${monthlyStats.profitEur.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 140, 60);
 
       doc.setTextColor(0);
       doc.setFont(undefined, 'normal');
@@ -177,7 +177,7 @@ const MonthlyReport: React.FC<MonthlyReportProps> = ({ transactions, userEmail }
           </div>
           <div className="bg-green-50/50 p-4 rounded-2xl border border-green-100">
             <span className="block text-[9px] font-black text-green-500 uppercase tracking-widest mb-1">নীট লাভ (EUR)</span>
-            <span className="text-xl font-black text-green-600">€{Math.round(monthlyStats.profitEur).toLocaleString()}</span>
+            <span className="text-xl font-black text-green-600">€{monthlyStats.profitEur.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           </div>
         </div>
 

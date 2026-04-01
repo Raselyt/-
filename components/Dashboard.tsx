@@ -26,7 +26,7 @@ const Dashboard: React.FC<DashboardProps> = ({ summary, timeRange, onOpenSetting
     .reverse()
     .map(tx => ({
       date: new Date(tx.date).toLocaleDateString('bn-BD', { day: 'numeric', month: 'short' }),
-      profit: Math.round(tx.profitEur)
+      profit: Number(tx.profitEur.toFixed(2))
     }));
 
   return (
@@ -41,7 +41,7 @@ const Dashboard: React.FC<DashboardProps> = ({ summary, timeRange, onOpenSetting
             </span>
             <div className="mt-3 flex items-baseline gap-2">
               <span className={`text-5xl font-black tracking-tighter ${summary.periodProfitEur >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                €{Math.round(summary.periodProfitEur).toLocaleString()}
+                €{summary.periodProfitEur.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
             </div>
           </div>
@@ -132,7 +132,7 @@ const Dashboard: React.FC<DashboardProps> = ({ summary, timeRange, onOpenSetting
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white px-6 py-5 rounded-[24px] border border-gray-100 shadow-sm flex flex-col justify-center">
           <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">মোট লাভ (EUR)</span>
-          <span className="text-xl font-black text-green-600">€{Math.round(summary.totalProfitEur).toLocaleString()}</span>
+          <span className="text-xl font-black text-green-600">€{summary.totalProfitEur.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
         </div>
         <div className="bg-white px-6 py-5 rounded-[24px] border border-gray-100 shadow-sm flex flex-col justify-center">
           <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">{timeRange === 'total' ? 'মোট ইনভেস্ট (BDT)' : 'নির্বাচিত ইনভেস্ট (BDT)'}</span>

@@ -74,7 +74,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onSubmit, avgBuyingRa
           setCalculatedBdt(0);
         }
       } else {
-        const total = parseInt(eurInput) || 0;
+        const total = parseFloat(eurInput) || 0;
         if (total > 0 && r > 0) {
           const autoFee = getAutoFee(total);
           setCashOutFee(autoFee.toString());
@@ -109,7 +109,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onSubmit, avgBuyingRa
         }
       } else {
         // EUR Mode (Old logic: Bonus added to BDT)
-        const principalEur = parseInt(eurInput) || 0;
+        const principalEur = parseFloat(eurInput) || 0;
         const tFee = parseFloat(transferFee) || 0;
         if (principalEur > 0 && r > 0) {
           const baseBdt = principalEur * r;
@@ -134,7 +134,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onSubmit, avgBuyingRa
       if (inputMode === 'BDT') {
         setCalculatedTotalEur(Math.round(netEur + currentFee));
       } else {
-        const totalEur = parseInt(eurInput) || 0;
+        const totalEur = parseFloat(eurInput) || 0;
         const net = totalEur - currentFee;
         const r = parseFloat(rate) || 0;
         setCalculatedBdt(net * r);

@@ -54,7 +54,7 @@ const DailyDetails: React.FC<DailyDetailsProps> = ({ transactions, selectedDate,
         <div className="bg-green-50/50 p-4 rounded-2xl border border-green-100/50">
           <span className="block text-[10px] font-black text-green-400 uppercase tracking-widest mb-1">মোট সংগৃহীত ইউরো</span>
           <div className="flex items-baseline gap-1">
-            <span className="text-2xl font-black text-green-700">€{Math.round(dailyEurTaken).toLocaleString()}</span>
+            <span className="text-2xl font-black text-green-700">€{dailyEurTaken.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           </div>
         </div>
 
