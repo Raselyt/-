@@ -13,11 +13,12 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onSubmit, avgBuyingRa
   const [inputMode, setInputMode] = useState<'EUR' | 'BDT'>('EUR');
   
   // Get unique customers from recent transactions
-  const frequentCustomers = Array.from(new Set(
+  const allUniqueCustomers = Array.from(new Set(
     transactions
       .filter(tx => tx.customerPhoneNumber)
       .map(tx => tx.customerPhoneNumber)
-  )).slice(0, 5);
+  ));
+  const frequentCustomers = allUniqueCustomers.slice(0, 5);
   
   // States for inputs
   const [eurInput, setEurInput] = useState(''); 
@@ -231,7 +232,19 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onSubmit, avgBuyingRa
             <label className="block text-xs font-black text-gray-400 uppercase mb-2 tracking-wider">কাস্টমারের ফোন নাম্বার</label>
             <div className="relative mb-3">
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">📞</span>
-              <input type="tel" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} className="w-full pl-10 p-4 bg-gray-50 border-0 rounded-2xl focus:ring-2 focus:ring-green-500 outline-none transition font-bold text-gray-800" placeholder="যেমন: ০১৮৭৪৬..." />
+              <input 
+                type="tel" 
+                list="customer-phones"
+                value={phoneNumber} 
+                onChange={(e) => setPhoneNumber(e.target.value)} 
+                className="w-full pl-10 p-4 bg-gray-50 border-0 rounded-2xl focus:ring-2 focus:ring-green-500 outline-none transition font-bold text-gray-800" 
+                placeholder="যেমন: ০১৮৭৪৬..." 
+              />
+              <datalist id="customer-phones">
+                {allUniqueCustomers.map(phone => (
+                  <option key={phone} value={phone || ''} />
+                ))}
+              </datalist>
             </div>
             {frequentCustomers.length > 0 && (
               <div className="flex flex-wrap gap-2 mb-4">
