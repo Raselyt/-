@@ -29,27 +29,52 @@ const App: React.FC = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   
-  const [isProfitPrivate, setIsProfitPrivate] = useState(false);
-  const [isBdtPrivate, setIsBdtPrivate] = useState(false);
-  const [isEurPrivate, setIsEurPrivate] = useState(false);
+  const [isProfitPrivate, setIsProfitPrivate] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('isProfitPrivate') === 'true';
+    }
+    return false;
+  });
+  const [isBdtPrivate, setIsBdtPrivate] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('isBdtPrivate') === 'true';
+    }
+    return false;
+  });
+  const [isEurPrivate, setIsEurPrivate] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('isEurPrivate') === 'true';
+    }
+    return false;
+  });
 
   // Function to update privacy in DB and State
   const updatePrivacySetting = async (key: 'is_profit_private' | 'is_bdt_private' | 'is_eur_private', value: boolean) => {
-    if (!currentUser) return;
-    
     // Update State immediately
-    if (key === 'is_profit_private') setIsProfitPrivate(value);
-    if (key === 'is_bdt_private') setIsBdtPrivate(value);
-    if (key === 'is_eur_private') setIsEurPrivate(value);
+    if (key === 'is_profit_private') {
+      setIsProfitPrivate(value);
+      localStorage.setItem('isProfitPrivate', value.toString());
+    }
+    if (key === 'is_bdt_private') {
+      setIsBdtPrivate(value);
+      localStorage.setItem('isBdtPrivate', value.toString());
+    }
+    if (key === 'is_eur_private') {
+      setIsEurPrivate(value);
+      localStorage.setItem('isEurPrivate', value.toString());
+    }
 
-    // Save to DB
+    if (!currentUser) return;
+
+    // Save to DB (optional sync)
     try {
       await supabase
         .from('profiles')
         .update({ [key]: value })
         .eq('id', currentUser.id);
     } catch (err) {
-      console.error(`Error saving ${key}:`, err);
+      // Silently fail if columns don't exist in DB, local storage still works
+      console.warn(`Database sync failed for ${key}, falling back to local storage.`);
     }
   };
 
@@ -132,10 +157,10 @@ const App: React.FC = () => {
         setTempOpeningBdt(profile.opening_bdt.toString());
         setTempOpeningEur(profile.opening_eur.toString());
         
-        // Load privacy settings
-        setIsProfitPrivate(!!profile.is_profit_private);
-        setIsBdtPrivate(!!profile.is_bdt_private);
-        setIsEurPrivate(!!profile.is_eur_private);
+        // Load privacy settings (DB as source of truth if available)
+        if (profile.is_profit_private !== undefined) setIsProfitPrivate(!!profile.is_profit_private);
+        if (profile.is_bdt_private !== undefined) setIsBdtPrivate(!!profile.is_bdt_private);
+        if (profile.is_eur_private !== undefined) setIsEurPrivate(!!profile.is_eur_private);
       }
     } catch (error) {
       console.error('Error fetching user data:', error);
