@@ -33,6 +33,26 @@ const App: React.FC = () => {
   const [isBdtPrivate, setIsBdtPrivate] = useState(false);
   const [isEurPrivate, setIsEurPrivate] = useState(false);
 
+  // Function to update privacy in DB and State
+  const updatePrivacySetting = async (key: 'is_profit_private' | 'is_bdt_private' | 'is_eur_private', value: boolean) => {
+    if (!currentUser) return;
+    
+    // Update State immediately
+    if (key === 'is_profit_private') setIsProfitPrivate(value);
+    if (key === 'is_bdt_private') setIsBdtPrivate(value);
+    if (key === 'is_eur_private') setIsEurPrivate(value);
+
+    // Save to DB
+    try {
+      await supabase
+        .from('profiles')
+        .update({ [key]: value })
+        .eq('id', currentUser.id);
+    } catch (err) {
+      console.error(`Error saving ${key}:`, err);
+    }
+  };
+
   const [tempOpeningBdt, setTempOpeningBdt] = useState('-121720');
   const [tempOpeningEur, setTempOpeningEur] = useState('0');
   
@@ -98,7 +118,7 @@ const App: React.FC = () => {
 
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
-        .select('opening_bdt, opening_eur')
+        .select('opening_bdt, opening_eur, is_profit_private, is_bdt_private, is_eur_private')
         .eq('id', currentUser.id)
         .single();
 
@@ -111,6 +131,11 @@ const App: React.FC = () => {
         setOpeningEur(Number(profile.opening_eur));
         setTempOpeningBdt(profile.opening_bdt.toString());
         setTempOpeningEur(profile.opening_eur.toString());
+        
+        // Load privacy settings
+        setIsProfitPrivate(!!profile.is_profit_private);
+        setIsBdtPrivate(!!profile.is_bdt_private);
+        setIsEurPrivate(!!profile.is_eur_private);
       }
     } catch (error) {
       console.error('Error fetching user data:', error);
@@ -553,11 +578,11 @@ const App: React.FC = () => {
           onOpenSettings={() => setIsSettingsOpen(true)} 
           transactions={summary.transactions}
           isProfitPrivate={isProfitPrivate}
-          setIsProfitPrivate={setIsProfitPrivate}
+          setIsProfitPrivate={(val) => updatePrivacySetting('is_profit_private', val)}
           isBdtPrivate={isBdtPrivate}
-          setIsBdtPrivate={setIsBdtPrivate}
+          setIsBdtPrivate={(val) => updatePrivacySetting('is_bdt_private', val)}
           isEurPrivate={isEurPrivate}
-          setIsEurPrivate={setIsEurPrivate}
+          setIsEurPrivate={(val) => updatePrivacySetting('is_eur_private', val)}
         />
         
         <div className="flex flex-wrap gap-3 justify-center md:justify-start">
