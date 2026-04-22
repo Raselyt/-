@@ -8,11 +8,24 @@ import { FileText, Download } from 'lucide-react';
 interface MonthlyReportProps {
   transactions: Transaction[];
   userEmail?: string;
+  isProfitPrivate?: boolean;
+  isBdtPrivate?: boolean;
+  isEurPrivate?: boolean;
 }
 
-const MonthlyReport: React.FC<MonthlyReportProps> = ({ transactions, userEmail }) => {
+const MonthlyReport: React.FC<MonthlyReportProps> = ({ 
+  transactions, 
+  userEmail,
+  isProfitPrivate = false,
+  isBdtPrivate = false,
+  isEurPrivate = false
+}) => {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  
+  const profitBlur = isProfitPrivate ? 'blur-md select-none pointer-events-none' : 'transition-all duration-300';
+  const bdtBlur = isBdtPrivate ? 'blur-md select-none pointer-events-none' : 'transition-all duration-300';
+  const eurBlur = isEurPrivate ? 'blur-md select-none pointer-events-none' : 'transition-all duration-300';
 
   const months = [
     'জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন',
@@ -167,17 +180,17 @@ const MonthlyReport: React.FC<MonthlyReportProps> = ({ transactions, userEmail }
       <div className="grid grid-cols-1 gap-3">
         <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
           <span className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">এ মাসের মোট বিকাশ পাঠানো</span>
-          <span className="text-xl font-black text-gray-900">৳{Math.round(monthlyStats.bdtSent).toLocaleString()}</span>
+          <span className={`text-xl font-black text-gray-900 ${bdtBlur}`}>৳{Math.round(monthlyStats.bdtSent).toLocaleString()}</span>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
             <span className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">সংগৃহীত ইউরো</span>
-            <span className="text-xl font-black text-blue-600">€{Math.round(monthlyStats.eurCollected).toLocaleString()}</span>
+            <span className={`text-xl font-black text-blue-600 ${eurBlur}`}>€{Math.round(monthlyStats.eurCollected).toLocaleString()}</span>
           </div>
           <div className="bg-green-50/50 p-4 rounded-2xl border border-green-100">
             <span className="block text-[9px] font-black text-green-500 uppercase tracking-widest mb-1">নীট লাভ (EUR)</span>
-            <span className="text-xl font-black text-green-600">€{monthlyStats.profitEur.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            <span className={`text-xl font-black text-green-600 ${profitBlur}`}>€{monthlyStats.profitEur.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           </div>
         </div>
 
@@ -185,9 +198,9 @@ const MonthlyReport: React.FC<MonthlyReportProps> = ({ transactions, userEmail }
           <div className="bg-red-50/50 p-4 rounded-2xl border border-red-100">
             <span className="block text-[9px] font-black text-red-500 uppercase tracking-widest mb-1">এ মাসের মোট খরচ</span>
             <div className="flex justify-between items-baseline">
-              <span className="text-xl font-black text-red-600">€{Math.round(monthlyStats.expensesEur).toLocaleString()}</span>
+              <span className={`text-xl font-black text-red-600 ${eurBlur}`}>€{Math.round(monthlyStats.expensesEur).toLocaleString()}</span>
               {monthlyStats.expensesBdt > 0 && (
-                <span className="text-xs font-bold text-red-400">৳{Math.round(monthlyStats.expensesBdt).toLocaleString()}</span>
+                <span className={`text-xs font-bold text-red-400 ${bdtBlur}`}>৳{Math.round(monthlyStats.expensesBdt).toLocaleString()}</span>
               )}
             </div>
           </div>

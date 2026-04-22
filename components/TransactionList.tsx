@@ -10,9 +10,27 @@ interface TransactionListProps {
   onDownloadReceipt: (tx: Transaction) => void;
   onDownloadPDF: (tx: Transaction) => void;
   avgBuyingRate: number;
+  isProfitPrivate?: boolean;
+  isBdtPrivate?: boolean;
+  isEurPrivate?: boolean;
 }
 
-const TransactionList: React.FC<TransactionListProps> = ({ transactions, onDelete, onShare, onCopy, onDownloadReceipt, onDownloadPDF, avgBuyingRate }) => {
+const TransactionList: React.FC<TransactionListProps> = ({ 
+  transactions, 
+  onDelete, 
+  onShare, 
+  onCopy, 
+  onDownloadReceipt, 
+  onDownloadPDF, 
+  avgBuyingRate,
+  isProfitPrivate = false,
+  isBdtPrivate = false,
+  isEurPrivate = false
+}) => {
+  const profitBlur = isProfitPrivate ? 'blur-md select-none pointer-events-none' : 'transition-all duration-300';
+  const bdtBlur = isBdtPrivate ? 'blur-md select-none pointer-events-none' : 'transition-all duration-300';
+  const eurBlur = isEurPrivate ? 'blur-md select-none pointer-events-none' : 'transition-all duration-300';
+
   if (transactions.length === 0) {
     return (
       <div className="text-center py-16 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
@@ -49,19 +67,19 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, onDelet
                   </span>
                 </td>
                 <td className="py-4 px-2">
-                  <div className="text-xs font-black text-gray-800">€{Math.round(tx.eurAmount).toLocaleString()}</div>
-                  <div className="text-[9px] text-gray-400">৳{Math.round(tx.bdtAmount).toLocaleString()}</div>
+                  <div className={`text-xs font-black text-gray-800 ${eurBlur}`}>€{Math.round(tx.eurAmount).toLocaleString()}</div>
+                  <div className={`text-[9px] text-gray-400 ${bdtBlur}`}>৳{Math.round(tx.bdtAmount).toLocaleString()}</div>
                 </td>
                 <td className="py-4 px-2">
                   {tx.type === TransactionType.BUY ? (
                     <span className="text-[10px] text-gray-200">—</span>
                   ) : (
                     <div className="flex flex-col" title={tx.usedBuyingRate ? `কেনা রেট ৳${tx.usedBuyingRate.toFixed(2)} অনুযায়ী হিসাব করা হয়েছে` : ''}>
-                      <span className={`text-xs font-black ${tx.profitEur >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                      <span className={`text-xs font-black ${tx.profitEur >= 0 ? 'text-green-600' : 'text-red-500'} ${profitBlur}`}>
                         {tx.profitEur >= 0 ? '+' : ''}€{tx.profitEur.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
                       {tx.usedBuyingRate && (
-                        <span className="text-[8px] text-gray-400">@ {tx.usedBuyingRate.toFixed(2)}</span>
+                        <span className={`text-[8px] text-gray-400 ${profitBlur}`}>@ {tx.usedBuyingRate.toFixed(2)}</span>
                       )}
                     </div>
                   )}

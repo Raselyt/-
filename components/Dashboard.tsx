@@ -1,16 +1,34 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { BusinessSummary, Transaction } from '../types';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
+import { Eye, EyeOff } from 'lucide-react';
 
 interface DashboardProps {
   summary: BusinessSummary & { periodProfitEur: number, periodProfitBdt: number };
   timeRange: 'today' | '7days' | '30days' | 'total';
   onOpenSettings: () => void;
   transactions: Transaction[];
+  isProfitPrivate: boolean;
+  setIsProfitPrivate: (val: boolean) => void;
+  isBdtPrivate: boolean;
+  setIsBdtPrivate: (val: boolean) => void;
+  isEurPrivate: boolean;
+  setIsEurPrivate: (val: boolean) => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ summary, timeRange, onOpenSettings, transactions }) => {
+const Dashboard: React.FC<DashboardProps> = ({ 
+  summary, 
+  timeRange, 
+  onOpenSettings, 
+  transactions,
+  isProfitPrivate,
+  setIsProfitPrivate,
+  isBdtPrivate,
+  setIsBdtPrivate,
+  isEurPrivate,
+  setIsEurPrivate
+}) => {
   const rangeLabels = {
     today: 'আজকের লাভ',
     '7days': 'গত ৭ দিনের লাভ',
@@ -19,6 +37,10 @@ const Dashboard: React.FC<DashboardProps> = ({ summary, timeRange, onOpenSetting
   };
 
   const isBdtNegative = summary.currentBdtBalance < 0;
+  
+  const profitBlur = isProfitPrivate ? 'blur-md select-none pointer-events-none' : 'transition-all duration-300';
+  const bdtBlur = isBdtPrivate ? 'blur-md select-none pointer-events-none' : 'transition-all duration-300';
+  const eurBlur = isEurPrivate ? 'blur-md select-none pointer-events-none' : 'transition-all duration-300';
 
   // Prepare chart data
   const chartData = transactions
@@ -33,32 +55,50 @@ const Dashboard: React.FC<DashboardProps> = ({ summary, timeRange, onOpenSetting
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {/* Profit Card */}
-        <div className="bg-white p-8 rounded-[32px] shadow-sm border border-gray-100 flex flex-col justify-between hover:shadow-lg transition-all duration-300 bg-gradient-to-br from-white to-green-50/20 group">
+        <div className="bg-white p-8 rounded-[32px] shadow-sm border border-gray-100 flex flex-col justify-between hover:shadow-lg transition-all duration-300 bg-gradient-to-br from-white to-green-50/20 group relative overflow-hidden">
+          <div className="absolute top-4 right-4">
+            <button 
+              onClick={() => setIsProfitPrivate(!isProfitPrivate)}
+              className="p-2 rounded-xl hover:bg-green-50 text-gray-300 hover:text-green-600 transition-all opacity-0 group-hover:opacity-100"
+              title={isProfitPrivate ? "পাবলিক মোড" : "প্রাইভেট মোড"}
+            >
+              {isProfitPrivate ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          </div>
           <div>
             <span className="text-gray-400 text-[10px] font-black uppercase tracking-widest flex items-center gap-2 group-hover:text-green-600 transition-colors">
               <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
               {rangeLabels[timeRange]} (ইউরো)
             </span>
             <div className="mt-3 flex items-baseline gap-2">
-              <span className={`text-5xl font-black tracking-tighter ${summary.periodProfitEur >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+              <span className={`text-5xl font-black tracking-tighter ${profitBlur} ${summary.periodProfitEur >= 0 ? 'text-green-600' : 'text-red-500'}`}>
                 €{summary.periodProfitEur.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
             </div>
           </div>
           <div className="mt-6 pt-4 border-t border-gray-50 flex justify-between items-center">
-            <span className="text-xs font-bold text-gray-500">৳{Math.round(summary.periodProfitBdt).toLocaleString()}</span>
+            <span className={`text-xs font-bold text-gray-500 ${profitBlur}`}>৳{Math.round(summary.periodProfitBdt).toLocaleString()}</span>
             <span className="text-[9px] font-black uppercase bg-green-50 text-green-700 px-3 py-1 rounded-full shadow-inner">নির্বাচিত লাভ</span>
           </div>
         </div>
 
         {/* BDT Balance Card (Debt/Surplus) */}
-        <div className={`p-8 rounded-[32px] shadow-sm border flex flex-col justify-between hover:shadow-lg transition-all duration-300 group ${isBdtNegative ? 'bg-red-50/30 border-red-100' : 'bg-white border-gray-100'}`}>
+        <div className={`p-8 rounded-[32px] shadow-sm border flex flex-col justify-between hover:shadow-lg transition-all duration-300 group relative overflow-hidden ${isBdtNegative ? 'bg-red-50/30 border-red-100' : 'bg-white border-gray-100'}`}>
+          <div className="absolute top-4 right-4">
+            <button 
+              onClick={() => setIsBdtPrivate(!isBdtPrivate)}
+              className={`p-2 rounded-xl transition-all opacity-0 group-hover:opacity-100 ${isBdtNegative ? 'hover:bg-red-100 text-red-300 hover:text-red-600' : 'hover:bg-blue-50 text-gray-300 hover:text-blue-600'}`}
+              title={isBdtPrivate ? "পাবলিক মোড" : "প্রাইভেট মোড"}
+            >
+              {isBdtPrivate ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          </div>
           <div>
             <span className={`text-[10px] font-black uppercase tracking-widest transition-colors ${isBdtNegative ? 'text-red-400' : 'text-gray-400 group-hover:text-blue-600'}`}>
               বিকাশ ব্যালেন্স (বিডিটি)
             </span>
             <div className="mt-3">
-              <span className={`text-5xl font-black tracking-tighter ${isBdtNegative ? 'text-red-500' : 'text-blue-600'}`}>
+              <span className={`text-5xl font-black tracking-tighter ${bdtBlur} ${isBdtNegative ? 'text-red-500' : 'text-blue-600'}`}>
                 ৳{Math.round(summary.currentBdtBalance).toLocaleString()}
               </span>
             </div>
@@ -67,7 +107,7 @@ const Dashboard: React.FC<DashboardProps> = ({ summary, timeRange, onOpenSetting
             <span className={`text-[10px] font-bold uppercase ${isBdtNegative ? 'text-red-400' : 'text-gray-400'}`}>
               {isBdtNegative ? 'এজেন্ট আপনার কাছে পাবে' : 'এজেন্টের কাছে বর্তমান জমা'}
             </span>
-            <span className={`text-[9px] font-black uppercase tracking-tighter ${isBdtNegative ? 'text-red-300' : 'text-blue-300'}`}>
+            <span className={`text-[9px] font-black uppercase tracking-tighter ${bdtBlur} ${isBdtNegative ? 'text-red-300' : 'text-blue-300'}`}>
               শুরু: ৳{Math.round(summary.openingBalanceBdt).toLocaleString()}
             </span>
           </div>
@@ -79,12 +119,21 @@ const Dashboard: React.FC<DashboardProps> = ({ summary, timeRange, onOpenSetting
           <div>
             <div className="flex justify-between items-start">
               <span className="text-gray-400 text-[10px] font-black uppercase tracking-widest group-hover:text-orange-500 transition-colors">আমার কাছে EUR (ক্যাশ)</span>
-              <button onClick={onOpenSettings} className="p-1.5 rounded-full hover:bg-orange-50 text-orange-400 transition-colors">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.443.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /></svg>
-              </button>
+              <div className="flex items-center gap-1">
+                <button 
+                  onClick={() => setIsEurPrivate(!isEurPrivate)}
+                  className="p-1.5 rounded-full hover:bg-orange-50 text-gray-300 hover:text-orange-500 transition-colors opacity-0 group-hover:opacity-100"
+                  title={isEurPrivate ? "পাবলিক মোড" : "প্রাইভেট মোড"}
+                >
+                  {isEurPrivate ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+                <button onClick={onOpenSettings} className="p-1.5 rounded-full hover:bg-orange-50 text-orange-400 transition-colors">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.443.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /></svg>
+                </button>
+              </div>
             </div>
             <div className="mt-3">
-              <span className={`text-5xl font-black tracking-tighter ${summary.currentEurBalance >= 0 ? 'text-orange-500' : 'text-red-500'}`}>
+              <span className={`text-5xl font-black tracking-tighter ${eurBlur} ${summary.currentEurBalance >= 0 ? 'text-orange-500' : 'text-red-500'}`}>
                 €{Math.round(summary.currentEurBalance).toLocaleString()}
               </span>
             </div>
@@ -92,7 +141,7 @@ const Dashboard: React.FC<DashboardProps> = ({ summary, timeRange, onOpenSetting
           <div className="mt-6 pt-4 border-t border-gray-50 flex flex-col gap-1">
             <div className="flex justify-between items-center">
               <span className="text-[10px] font-bold text-gray-400 uppercase">বর্তমান পকেট ক্যাশ</span>
-              <span className="text-[10px] font-black text-orange-400 uppercase tracking-tighter">ওপেনিং: €{Math.round(summary.openingBalanceEur).toLocaleString()}</span>
+              <span className={`text-[10px] font-black text-orange-400 uppercase tracking-tighter ${eurBlur}`}>ওপেনিং: €{Math.round(summary.openingBalanceEur).toLocaleString()}</span>
             </div>
           </div>
         </div>
@@ -132,23 +181,23 @@ const Dashboard: React.FC<DashboardProps> = ({ summary, timeRange, onOpenSetting
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white px-6 py-5 rounded-[24px] border border-gray-100 shadow-sm flex flex-col justify-center">
           <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">মোট লাভ (EUR)</span>
-          <span className="text-xl font-black text-green-600">€{summary.totalProfitEur.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          <span className={`text-xl font-black text-green-600 ${profitBlur}`}>€{summary.totalProfitEur.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
         </div>
         <div className="bg-white px-6 py-5 rounded-[24px] border border-gray-100 shadow-sm flex flex-col justify-center">
           <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">{timeRange === 'total' ? 'মোট ইনভেস্ট (BDT)' : 'নির্বাচিত ইনভেস্ট (BDT)'}</span>
-          <span className="text-xl font-black text-gray-700">৳{Math.round(summary.totalInvestmentBdt).toLocaleString()}</span>
+          <span className={`text-xl font-black text-gray-700 ${bdtBlur}`}>৳{Math.round(summary.totalInvestmentBdt).toLocaleString()}</span>
         </div>
         <div className="bg-white px-6 py-5 rounded-[24px] border border-gray-100 shadow-sm flex flex-col justify-center">
           <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">হাতে থাকা সংগৃহীত ইউরো</span>
-          <span className={`text-xl font-black ${summary.totalCustomerEur >= 0 ? 'text-blue-600' : 'text-red-500'}`}>
+          <span className={`text-xl font-black ${summary.totalCustomerEur >= 0 ? 'text-blue-600' : 'text-red-500'} ${eurBlur}`}>
             €{Math.round(summary.totalCustomerEur).toLocaleString()}
           </span>
         </div>
         <div className="bg-white px-6 py-5 rounded-[24px] border border-gray-100 shadow-sm flex flex-col justify-center relative">
           <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">{timeRange === 'total' ? 'সর্বশেষ কেনা রেট' : 'নির্বাচিত গড় রেট'}</span>
-          <span className="text-xl font-black text-orange-500">৳{summary.avgBuyingRate.toFixed(2)}</span>
+          <span className={`text-xl font-black text-orange-500 ${eurBlur}`}>৳{summary.avgBuyingRate.toFixed(2)}</span>
           {summary.avgBuyingRate > 0 && (
-            <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-max">
+            <div className={`absolute -bottom-3 left-1/2 -translate-x-1/2 w-max ${eurBlur}`}>
               <span className="text-[9px] font-bold text-gray-500 bg-orange-50 px-2 py-0.5 rounded-full border border-orange-100 whitespace-nowrap">
                 বিক্রয় রেট: ৳{(summary.avgBuyingRate - 1.5).toFixed(2)}
               </span>

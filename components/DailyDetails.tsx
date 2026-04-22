@@ -6,9 +6,19 @@ interface DailyDetailsProps {
   transactions: Transaction[];
   selectedDate: string;
   onDateChange: (date: string) => void;
+  isBdtPrivate?: boolean;
+  isEurPrivate?: boolean;
 }
 
-const DailyDetails: React.FC<DailyDetailsProps> = ({ transactions, selectedDate, onDateChange }) => {
+const DailyDetails: React.FC<DailyDetailsProps> = ({ 
+  transactions, 
+  selectedDate, 
+  onDateChange,
+  isBdtPrivate = false,
+  isEurPrivate = false
+}) => {
+  const bdtBlur = isBdtPrivate ? 'blur-md select-none pointer-events-none' : 'transition-all duration-300';
+  const eurBlur = isEurPrivate ? 'blur-md select-none pointer-events-none' : 'transition-all duration-300';
   // Filter transactions for the selected date
   const filteredTxs = transactions.filter(tx => {
     const txDate = new Date(tx.date).toISOString().split('T')[0];
@@ -47,14 +57,14 @@ const DailyDetails: React.FC<DailyDetailsProps> = ({ transactions, selectedDate,
         <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100/50">
           <span className="block text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">মোট পাঠানো হয়েছে (বিকাশ)</span>
           <div className="flex items-baseline gap-1">
-            <span className="text-2xl font-black text-blue-700">৳{Math.round(dailyBdtSent).toLocaleString()}</span>
+            <span className={`text-2xl font-black text-blue-700 ${bdtBlur}`}>৳{Math.round(dailyBdtSent).toLocaleString()}</span>
           </div>
         </div>
 
         <div className="bg-green-50/50 p-4 rounded-2xl border border-green-100/50">
           <span className="block text-[10px] font-black text-green-400 uppercase tracking-widest mb-1">মোট সংগৃহীত ইউরো</span>
           <div className="flex items-baseline gap-1">
-            <span className="text-2xl font-black text-green-700">€{dailyEurTaken.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            <span className={`text-2xl font-black text-green-700 ${eurBlur}`}>€{dailyEurTaken.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           </div>
         </div>
 

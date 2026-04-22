@@ -15,7 +15,7 @@ import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import Receipt from './components/Receipt.tsx';
-import { Download, FileText, BarChart3, Users, Bell } from 'lucide-react';
+import { Download, FileText, BarChart3, Users, Bell, Eye, EyeOff } from 'lucide-react';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -29,6 +29,10 @@ const App: React.FC = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   
+  const [isProfitPrivate, setIsProfitPrivate] = useState(false);
+  const [isBdtPrivate, setIsBdtPrivate] = useState(false);
+  const [isEurPrivate, setIsEurPrivate] = useState(false);
+
   const [tempOpeningBdt, setTempOpeningBdt] = useState('-121720');
   const [tempOpeningEur, setTempOpeningEur] = useState('0');
   
@@ -543,7 +547,18 @@ const App: React.FC = () => {
           ))}
         </div>
         
-        <Dashboard summary={summary.summary} timeRange={profitTimeRange} onOpenSettings={() => setIsSettingsOpen(true)} transactions={summary.transactions} />
+        <Dashboard 
+          summary={summary.summary} 
+          timeRange={profitTimeRange} 
+          onOpenSettings={() => setIsSettingsOpen(true)} 
+          transactions={summary.transactions}
+          isProfitPrivate={isProfitPrivate}
+          setIsProfitPrivate={setIsProfitPrivate}
+          isBdtPrivate={isBdtPrivate}
+          setIsBdtPrivate={setIsBdtPrivate}
+          isEurPrivate={isEurPrivate}
+          setIsEurPrivate={setIsEurPrivate}
+        />
         
         <div className="flex flex-wrap gap-3 justify-center md:justify-start">
           <button onClick={exportToExcel} className="flex items-center gap-2 px-4 py-2 bg-green-50 text-green-700 rounded-xl text-[10px] font-black uppercase tracking-widest border border-green-100 hover:bg-green-100 transition">
@@ -598,12 +613,27 @@ const App: React.FC = () => {
                 onDownloadReceipt={downloadReceipt}
                 onDownloadPDF={downloadReceiptPDF}
                 avgBuyingRate={summary.summary.avgBuyingRate} 
+                isProfitPrivate={isProfitPrivate}
+                isBdtPrivate={isBdtPrivate}
+                isEurPrivate={isEurPrivate}
               />
             </div>
           </div>
           <div className="space-y-8">
-            <DailyDetails transactions={summary.transactions} selectedDate={selectedReportDate} onDateChange={setSelectedReportDate} />
-            <MonthlyReport transactions={summary.transactions} userEmail={currentUser?.email} />
+            <DailyDetails 
+              transactions={summary.transactions} 
+              selectedDate={selectedReportDate} 
+              onDateChange={setSelectedReportDate} 
+              isBdtPrivate={isBdtPrivate}
+              isEurPrivate={isEurPrivate}
+            />
+            <MonthlyReport 
+              transactions={summary.transactions} 
+              userEmail={currentUser?.email} 
+              isProfitPrivate={isProfitPrivate}
+              isBdtPrivate={isBdtPrivate}
+              isEurPrivate={isEurPrivate}
+            />
             <AIInput onParsed={addTransaction} />
             <ProfitAdvisor summary={summary.summary} />
           </div>
