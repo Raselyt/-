@@ -321,7 +321,7 @@ const App: React.FC = () => {
         periodProfitBdt
       }
     };
-  }, [transactions, openingBdt, openingEur, profitTimeRange]);
+  }, [transactions, openingBdt, openingEur, profitTimeRange, searchQuery, filterType, showNoPhoneOnly]);
 
   const handleUpdateOpeningBalances = async () => {
     if (!currentUser) return;

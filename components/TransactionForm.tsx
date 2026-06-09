@@ -156,6 +156,17 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onSubmit, avgBuyingRa
     if (type !== TransactionType.EXPENSE && (!finalEur || !finalRate)) return;
     if (type === TransactionType.EXPENSE && !eurInput && !bdtInput) return;
 
+    // Build confirmation message in Bengali to prevent accidental saves
+    const confirmMessage = type === TransactionType.BUY 
+      ? `নতুন ইনভেস্টমেন্ট (Buy) সেভ করতে চান?\n\nপরিমাণ: ৳${Math.round(calculatedBdt).toLocaleString()}\nরেট: ৳${finalRate}\nমোট ইউরো: €${finalEur}`
+      : type === TransactionType.EXPENSE
+      ? `নতুন খরচের হিসাব সেভ করতে চান?\n\nইউরো: €${finalEur}\nটাকা: ৳${Math.round(calculatedBdt).toLocaleString()}`
+      : `কাস্টমার এন্ট্রি (Sell) সেভ করতে চান?\n\nপাঠানো টাকা: ৳${Math.round(calculatedBdt).toLocaleString()}\nরেট: ৳${finalRate}\nসংগৃহীত ইউরো: €${finalEur}\nফোন নাম্বার: ${phoneNumber}`;
+
+    if (!confirm(confirmMessage)) {
+      return;
+    }
+
     onSubmit({
       type,
       eurAmount: finalEur,
