@@ -85,6 +85,7 @@ const App: React.FC = () => {
   const [selectedReportDate, setSelectedReportDate] = useState(new Date().toISOString().split('T')[0]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'ALL' | TransactionType>('ALL');
+  const [showNoPhoneOnly, setShowNoPhoneOnly] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -270,9 +271,26 @@ const App: React.FC = () => {
 
     // Apply search and filter
     const filteredTransactions = processedTransactions.filter(tx => {
+      // Filter for missing phone numbers (only for SELL transactions)
+      if (showNoPhoneOnly) {
+        if (tx.type !== TransactionType.SELL) return false;
+        if (tx.customerPhoneNumber && tx.customerPhoneNumber.trim().length > 0) return false;
+      }
+
+      const query = searchQuery.trim().toLowerCase();
+      if (!query) {
+        const matchesType = filterType === 'ALL' || tx.type === filterType;
+        return matchesType;
+      }
+
       const matchesSearch = 
-        (tx.customerPhoneNumber?.includes(searchQuery)) || 
-        (tx.note?.toLowerCase().includes(searchQuery.toLowerCase()));
+        (tx.customerPhoneNumber && tx.customerPhoneNumber.toLowerCase().includes(query)) || 
+        (tx.note && tx.note.toLowerCase().includes(query)) ||
+        (tx.bdtAmount && Math.round(tx.bdtAmount).toString().includes(query)) ||
+        (tx.eurAmount && Math.round(tx.eurAmount).toString().includes(query)) ||
+        (tx.rate && tx.rate.toString().includes(query)) ||
+        (tx.type && tx.type.toLowerCase().includes(query));
+
       const matchesType = filterType === 'ALL' || tx.type === filterType;
       return matchesSearch && matchesType;
     });
@@ -642,16 +660,32 @@ const App: React.FC = () => {
                     />
                     <svg className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                   </div>
-                  <div className="flex bg-gray-50 p-1 rounded-xl border border-gray-100">
+                   <div className="flex bg-gray-50 p-1 rounded-xl border border-gray-100 flex-wrap gap-1">
                     {(['ALL', TransactionType.BUY, TransactionType.SELL] as const).map((type) => (
                       <button 
                         key={type} 
-                        onClick={() => setFilterType(type)}
-                        className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all ${filterType === type ? 'bg-white shadow-sm text-blue-600' : 'text-gray-400'}`}
+                        onClick={() => {
+                          setFilterType(type);
+                          setShowNoPhoneOnly(false);
+                        }}
+                        className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all ${filterType === type && !showNoPhoneOnly ? 'bg-white shadow-sm text-blue-600' : 'text-gray-400'}`}
                       >
                         {type === 'ALL' ? 'সব' : type}
                       </button>
                     ))}
+                    <button 
+                      onClick={() => {
+                        const nextValue = !showNoPhoneOnly;
+                        setShowNoPhoneOnly(nextValue);
+                        if (nextValue) {
+                          setFilterType('ALL');
+                        }
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 ${showNoPhoneOnly ? 'bg-red-500 text-white shadow-sm' : 'text-red-500 hover:bg-red-50'}`}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${showNoPhoneOnly ? 'bg-white' : 'bg-red-500 animate-pulse'}`}></span>
+                      নাম্বার ছাড়া হিসাবসমূহ
+                    </button>
                   </div>
                 </div>
               </div>

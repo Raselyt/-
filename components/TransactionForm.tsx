@@ -148,6 +148,11 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onSubmit, avgBuyingRa
     const finalEur = type === TransactionType.EXPENSE ? (parseFloat(eurInput) || 0) : calculatedTotalEur;
     const finalRate = type === TransactionType.EXPENSE ? 1 : parseFloat(rate);
     
+    if (type === TransactionType.SELL && !phoneNumber.trim()) {
+      alert('দয়া করে কাস্টমারের ফোন নাম্বার দিন। এটি বাধ্যতামূলক!');
+      return;
+    }
+
     if (type !== TransactionType.EXPENSE && (!finalEur || !finalRate)) return;
     if (type === TransactionType.EXPENSE && !eurInput && !bdtInput) return;
 
@@ -235,6 +240,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onSubmit, avgBuyingRa
               <input 
                 type="tel" 
                 list="customer-phones"
+                required={type === TransactionType.SELL}
                 value={phoneNumber} 
                 onChange={(e) => setPhoneNumber(e.target.value)} 
                 className="w-full pl-10 p-4 bg-gray-50 border-0 rounded-2xl focus:ring-2 focus:ring-green-500 outline-none transition font-bold text-gray-800" 
