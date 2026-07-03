@@ -500,7 +500,7 @@ const App: React.FC = () => {
     if (!generatingReceiptTx || !receiptDownloadType) return;
 
     const processDownload = async () => {
-      // Small timeout to guarantee DOM mounting and font rendering of the single dynamic element
+      // Small timeout to guarantee DOM mounting of the single dynamic element
       await new Promise(resolve => setTimeout(resolve, 100));
       
       const element = document.getElementById(`receipt-${generatingReceiptTx.id}`);
@@ -511,23 +511,68 @@ const App: React.FC = () => {
         return;
       }
       
+      let iframe: HTMLIFrameElement | null = null;
       try {
-        const originalStyle = element.style.cssText;
-        element.style.position = 'fixed';
-        element.style.top = '0';
-        element.style.left = '0';
-        element.style.zIndex = '99999';
-        element.style.display = 'block';
-        element.style.visibility = 'visible';
-        element.style.opacity = '1';
-        element.style.pointerEvents = 'none';
-        element.style.transform = 'none';
+        // Create hidden iframe
+        iframe = document.createElement('iframe');
+        iframe.style.position = 'fixed';
+        iframe.style.left = '-9999px';
+        iframe.style.top = '0';
+        iframe.style.width = '400px';
+        iframe.style.height = '800px';
+        iframe.style.border = 'none';
+        iframe.style.pointerEvents = 'none';
+        document.body.appendChild(iframe);
 
-        // Brief delay for canvas layout positioning stability
-        await new Promise(resolve => setTimeout(resolve, 100));
+        const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+        if (!iframeDoc) {
+          throw new Error('Could not access iframe document');
+        }
+
+        iframeDoc.open();
+        iframeDoc.write(`
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <meta charset="utf-8">
+              <title>Receipt</title>
+              <style>
+                body { margin: 0; padding: 0; background: white; }
+              </style>
+            </head>
+            <body>
+            </body>
+          </html>
+        `);
+        iframeDoc.close();
+
+        // Copy styles
+        const linksAndStyles = document.querySelectorAll('link[rel="stylesheet"], style');
+        linksAndStyles.forEach((el) => {
+          const clone = el.cloneNode(true);
+          iframeDoc.head.appendChild(clone);
+        });
+
+        // Clone receipt element and append
+        const receiptClone = element.cloneNode(true) as HTMLElement;
+        // Ensure clone is visible inside iframe
+        receiptClone.style.display = 'block';
+        receiptClone.style.visibility = 'visible';
+        receiptClone.style.opacity = '1';
+        receiptClone.style.transform = 'none';
+        receiptClone.style.position = 'static';
+        iframeDoc.body.appendChild(receiptClone);
+
+        // Wait a short bit to ensure styles are parsed and fonts are ready
+        await new Promise(resolve => setTimeout(resolve, 150));
+
+        const targetElement = iframeDoc.getElementById(element.id);
+        if (!targetElement) {
+          throw new Error('Cloned element not found in iframe');
+        }
 
         if (receiptDownloadType === 'PNG') {
-          const canvas = await html2canvas(element, {
+          const canvas = await html2canvas(targetElement, {
             scale: 3,
             backgroundColor: '#ffffff',
             useCORS: true,
@@ -535,11 +580,9 @@ const App: React.FC = () => {
             allowTaint: true,
             scrollX: 0,
             scrollY: 0,
-            windowWidth: element.offsetWidth,
-            windowHeight: element.offsetHeight,
+            windowWidth: 400,
+            windowHeight: targetElement.offsetHeight || 600,
           });
-          
-          element.style.cssText = originalStyle;
           
           canvas.toBlob((blob) => {
             if (!blob) {
@@ -556,15 +599,13 @@ const App: React.FC = () => {
             setTimeout(() => URL.revokeObjectURL(url), 100);
           }, 'image/png', 1.0);
         } else if (receiptDownloadType === 'PDF') {
-          const canvas = await html2canvas(element, {
+          const canvas = await html2canvas(targetElement, {
             scale: 3,
             backgroundColor: '#ffffff',
             useCORS: true,
             logging: false,
             allowTaint: true,
           });
-
-          element.style.cssText = originalStyle;
 
           const imgData = canvas.toDataURL('image/png');
           const pdf = new jsPDF({
@@ -580,6 +621,9 @@ const App: React.FC = () => {
         console.error('Receipt download error:', error);
         alert('রিসিট ডাউনলোড করতে সমস্যা হয়েছে।');
       } finally {
+        if (iframe && iframe.parentNode) {
+          iframe.parentNode.removeChild(iframe);
+        }
         setGeneratingReceiptTx(null);
         setReceiptDownloadType(null);
       }
@@ -734,9 +778,9 @@ const App: React.FC = () => {
         </div>
 
         {/* Hidden Receipt Templates for generation - rendered dynamically on-demand for massive speedup */}
-        <div className="fixed left-[-9999px] top-0 pointer-events-none overflow-hidden h-0 w-0">
+        <div className="fixed left-[-9999px] top-0 pointer-events-none overflow-hidden w-[400px] h-[800px]">
           {generatingReceiptTx && (
-            <Receipt transaction={generatingReceiptTx} businessName="রেমিটেন্স লেজার" userEmail={currentUser?.email || ''} />
+            <Receipt transaction={generatingReceiptTx} businessName="রেমিটেন্স LEDGER" userEmail={currentUser?.email || ''} />
           )}
         </div>
       </main>
