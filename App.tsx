@@ -492,100 +492,110 @@ const App: React.FC = () => {
     }
   };
 
-  const downloadReceipt = async (tx: Transaction) => {
-    const element = document.getElementById(`receipt-${tx.id}`);
-    if (!element) {
-      alert('রিসিট টেমপ্লেট পাওয়া যায়নি। দয়া করে আবার চেষ্টা করুন।');
-      return;
-    }
-    
-    try {
-      const originalStyle = element.style.cssText;
-      element.style.position = 'fixed';
-      element.style.top = '0';
-      element.style.left = '0';
-      element.style.zIndex = '99999';
-      element.style.display = 'block';
-      element.style.visibility = 'visible';
-      element.style.opacity = '1';
-      element.style.pointerEvents = 'none';
-      element.style.transform = 'none';
+  const [generatingReceiptTx, setGeneratingReceiptTx] = useState<Transaction | null>(null);
+  const [receiptDownloadType, setReceiptDownloadType] = useState<'PNG' | 'PDF' | null>(null);
 
-      await new Promise(resolve => setTimeout(resolve, 200));
+  // Dynamic receipt generation logic that runs when states are set
+  useEffect(() => {
+    if (!generatingReceiptTx || !receiptDownloadType) return;
 
-      const canvas = await html2canvas(element, {
-        scale: 3,
-        backgroundColor: '#ffffff',
-        useCORS: true,
-        logging: false,
-        allowTaint: true,
-        scrollX: 0,
-        scrollY: 0,
-        windowWidth: element.offsetWidth,
-        windowHeight: element.offsetHeight,
-      });
+    const processDownload = async () => {
+      // Small timeout to guarantee DOM mounting and font rendering of the single dynamic element
+      await new Promise(resolve => setTimeout(resolve, 100));
       
-      element.style.cssText = originalStyle;
+      const element = document.getElementById(`receipt-${generatingReceiptTx.id}`);
+      if (!element) {
+        alert('রিসিট টেমপ্লেট পাওয়া যায়নি। দয়া করে আবার চেষ্টা করুন।');
+        setGeneratingReceiptTx(null);
+        setReceiptDownloadType(null);
+        return;
+      }
       
-      canvas.toBlob((blob) => {
-        if (!blob) {
-          alert('ছবি তৈরি করতে সমস্যা হয়েছে');
-          return;
+      try {
+        const originalStyle = element.style.cssText;
+        element.style.position = 'fixed';
+        element.style.top = '0';
+        element.style.left = '0';
+        element.style.zIndex = '99999';
+        element.style.display = 'block';
+        element.style.visibility = 'visible';
+        element.style.opacity = '1';
+        element.style.pointerEvents = 'none';
+        element.style.transform = 'none';
+
+        // Brief delay for canvas layout positioning stability
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        if (receiptDownloadType === 'PNG') {
+          const canvas = await html2canvas(element, {
+            scale: 3,
+            backgroundColor: '#ffffff',
+            useCORS: true,
+            logging: false,
+            allowTaint: true,
+            scrollX: 0,
+            scrollY: 0,
+            windowWidth: element.offsetWidth,
+            windowHeight: element.offsetHeight,
+          });
+          
+          element.style.cssText = originalStyle;
+          
+          canvas.toBlob((blob) => {
+            if (!blob) {
+              alert('ছবি তৈরি করতে সমস্যা হয়েছে');
+              return;
+            }
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `Receipt_${generatingReceiptTx.customerPhoneNumber || 'TX'}_${generatingReceiptTx.id.slice(0, 5)}.png`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            setTimeout(() => URL.revokeObjectURL(url), 100);
+          }, 'image/png', 1.0);
+        } else if (receiptDownloadType === 'PDF') {
+          const canvas = await html2canvas(element, {
+            scale: 3,
+            backgroundColor: '#ffffff',
+            useCORS: true,
+            logging: false,
+            allowTaint: true,
+          });
+
+          element.style.cssText = originalStyle;
+
+          const imgData = canvas.toDataURL('image/png');
+          const pdf = new jsPDF({
+            orientation: 'portrait',
+            unit: 'px',
+            format: [canvas.width / 3, canvas.height / 3]
+          });
+
+          pdf.addImage(imgData, 'PNG', 0, 0, canvas.width / 3, canvas.height / 3);
+          pdf.save(`Receipt_${generatingReceiptTx.customerPhoneNumber || 'TX'}.pdf`);
         }
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `Receipt_${tx.customerPhoneNumber || 'TX'}_${tx.id.slice(0, 5)}.png`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        setTimeout(() => URL.revokeObjectURL(url), 100);
-      }, 'image/png', 1.0);
+      } catch (error) {
+        console.error('Receipt download error:', error);
+        alert('রিসিট ডাউনলোড করতে সমস্যা হয়েছে।');
+      } finally {
+        setGeneratingReceiptTx(null);
+        setReceiptDownloadType(null);
+      }
+    };
 
-    } catch (error) {
-      console.error('Receipt download error:', error);
-      alert('রিসিট ডাউনলোড করতে সমস্যা হয়েছে।');
-    }
+    processDownload();
+  }, [generatingReceiptTx, receiptDownloadType]);
+
+  const downloadReceipt = (tx: Transaction) => {
+    setGeneratingReceiptTx(tx);
+    setReceiptDownloadType('PNG');
   };
 
-  const downloadReceiptPDF = async (tx: Transaction) => {
-    const element = document.getElementById(`receipt-${tx.id}`);
-    if (!element) return;
-
-    try {
-      const originalStyle = element.style.cssText;
-      element.style.position = 'fixed';
-      element.style.top = '0';
-      element.style.left = '0';
-      element.style.zIndex = '99999';
-      element.style.display = 'block';
-      element.style.visibility = 'visible';
-      element.style.opacity = '1';
-      element.style.transform = 'none';
-
-      await new Promise(resolve => setTimeout(resolve, 200));
-
-      const canvas = await html2canvas(element, {
-        scale: 3,
-        backgroundColor: '#ffffff',
-        useCORS: true,
-      });
-
-      element.style.cssText = originalStyle;
-
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'px',
-        format: [canvas.width / 3, canvas.height / 3]
-      });
-
-      pdf.addImage(imgData, 'PNG', 0, 0, canvas.width / 3, canvas.height / 3);
-      pdf.save(`Receipt_${tx.customerPhoneNumber || 'TX'}.pdf`);
-    } catch (error) {
-      console.error('PDF Error:', error);
-      alert('PDF তৈরি করতে সমস্যা হয়েছে');
-    }
+  const downloadReceiptPDF = (tx: Transaction) => {
+    setGeneratingReceiptTx(tx);
+    setReceiptDownloadType('PDF');
   };
 
   if (isLoading && !currentUser) {
@@ -723,11 +733,11 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        {/* Hidden Receipt Templates for generation */}
+        {/* Hidden Receipt Templates for generation - rendered dynamically on-demand for massive speedup */}
         <div className="fixed left-[-9999px] top-0 pointer-events-none overflow-hidden h-0 w-0">
-          {summary.transactions.map(tx => (
-            <Receipt key={tx.id} transaction={tx} businessName="রেমিটেন্স লেজার" userEmail={currentUser?.email || ''} />
-          ))}
+          {generatingReceiptTx && (
+            <Receipt transaction={generatingReceiptTx} businessName="রেমিটেন্স লেজার" userEmail={currentUser?.email || ''} />
+          )}
         </div>
       </main>
 
