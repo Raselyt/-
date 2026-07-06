@@ -19,11 +19,26 @@ const Receipt: React.FC<ReceiptProps> = ({ transaction, businessName, userEmail 
 
   return (
     <div id={`receipt-${transaction.id}`} className="bg-white p-8 w-[400px] border border-gray-200 shadow-lg font-sans">
-      <div className="text-center border-b-2 border-gray-100 pb-4 mb-6">
+      <div className="text-center border-b-2 border-gray-100 pb-4 mb-4">
         <h1 className="text-2xl font-black text-blue-600 uppercase tracking-tight">{businessName}</h1>
         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">{userEmail}</p>
         <div className="mt-2 inline-block bg-green-100 text-green-700 text-[10px] font-black px-3 py-1 rounded-full uppercase">
           ডিজিটাল মানি রিসিট
+        </div>
+      </div>
+
+      {/* পাঠানো মোট টাকার পরিমাণ উপরে হাইলাইট */}
+      <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 mb-5 text-center">
+        <div className="text-[11px] font-bold text-blue-600 uppercase tracking-wider mb-2">মোট পাঠানো পরিমাণ (Total Sent)</div>
+        <div className="grid grid-cols-2 divide-x divide-blue-100">
+          <div className="text-center pr-2">
+            <span className="block text-[9px] font-bold text-gray-400 uppercase">মোট ইউরো</span>
+            <span className="text-lg font-black text-blue-700">€{transaction.eurAmount.toLocaleString()}</span>
+          </div>
+          <div className="text-center pl-2">
+            <span className="block text-[9px] font-bold text-gray-400 uppercase">মোট টাকা</span>
+            <span className="text-lg font-black text-green-600">৳{Math.round(transaction.bdtAmount).toLocaleString()}</span>
+          </div>
         </div>
       </div>
 
