@@ -53,6 +53,23 @@ const Dashboard: React.FC<DashboardProps> = ({
 
   return (
     <div className="space-y-6">
+      {/* অল-টাইম মোট পাঠানো (Remittance Sent) - অত্যন্ত ছোট এবং পরিপাটি আকারে */}
+      <div className="bg-white border border-gray-100 p-3.5 px-5 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm text-xs">
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse"></span>
+          <span className="font-extrabold text-gray-500 uppercase tracking-wider text-[10px]">শুরু থেকে মোট পাঠানো (All-Time Sent):</span>
+        </div>
+        <div className="flex items-center gap-4 font-black text-gray-800">
+          <span className={`${bdtBlur} bg-gray-50 text-gray-700 px-3 py-1.5 rounded-lg border border-gray-100`}>
+            টাকা: ৳{Math.round(summary.allTimeTotalSellBdt || 0).toLocaleString()}
+          </span>
+          <span className="text-gray-300 hidden sm:inline">|</span>
+          <span className={`${eurBlur} bg-blue-50/50 text-blue-700 px-3 py-1.5 rounded-lg border border-blue-50`}>
+            ইউরো: €{(summary.allTimeTotalSellEur || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </span>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {/* Profit Card */}
         <div className="bg-white p-8 rounded-[32px] shadow-sm border border-gray-100 flex flex-col justify-between hover:shadow-lg transition-all duration-300 bg-gradient-to-br from-white to-green-50/20 group relative overflow-hidden">

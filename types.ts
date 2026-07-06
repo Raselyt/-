@@ -41,4 +41,6 @@ export interface BusinessSummary {
   totalCustomerEur: number; // Total EUR received from customers
   periodProfitEur: number;
   periodProfitBdt: number;
+  allTimeTotalSellBdt?: number; // Total BDT sent to customers (All time)
+  allTimeTotalSellEur?: number; // Total EUR received for customer remittance (All time)
 }

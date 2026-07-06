@@ -185,6 +185,8 @@ const App: React.FC = () => {
     let periodProfitEur = 0;
     let periodProfitBdt = 0;
     let totalCustomerEur = 0; 
+    let allTimeTotalSellBdt = 0;
+    let allTimeTotalSellEur = 0;
 
     const now = new Date();
     now.setHours(0, 0, 0, 0);
@@ -241,6 +243,8 @@ const App: React.FC = () => {
         currentBdt -= tx.bdtAmount; 
         currentEur += tx.eurAmount;
         totalCustomerEur += tx.eurAmount; 
+        allTimeTotalSellBdt += tx.bdtAmount;
+        allTimeTotalSellEur += tx.eurAmount;
 
         // Profit is calculated based on the latest buying rate at the time of sale
         // Fallback to overall average if no prior buy exists
@@ -318,7 +322,9 @@ const App: React.FC = () => {
         openingBalanceEur: openingEur,
         totalCustomerEur,
         periodProfitEur,
-        periodProfitBdt
+        periodProfitBdt,
+        allTimeTotalSellBdt,
+        allTimeTotalSellEur
       }
     };
   }, [transactions, openingBdt, openingEur, profitTimeRange, searchQuery, filterType, showNoPhoneOnly]);
@@ -459,8 +465,40 @@ const App: React.FC = () => {
       doc.setFontSize(18);
       doc.text("Remittance Ledger Report", 14, 20);
       doc.setFontSize(10);
-      doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 30);
-      doc.text(`User: ${currentUser?.email}`, 14, 35);
+      doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 28);
+      doc.text(`User: ${currentUser?.email}`, 14, 33);
+
+      // Calculate current report totals (remittance sent)
+      let filteredSellBdt = 0;
+      let filteredSellEur = 0;
+      summary.transactions.forEach(tx => {
+        if (tx.type === TransactionType.SELL) {
+          filteredSellBdt += tx.bdtAmount;
+          filteredSellEur += tx.eurAmount;
+        }
+      });
+
+      const allTimeSellBdt = summary.summary.allTimeTotalSellBdt || 0;
+      const allTimeSellEur = summary.summary.allTimeTotalSellEur || 0;
+
+      // 1. All-Time totals
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(37, 99, 235); // Blue
+      doc.text("ALL-TIME TOTAL REMITTANCE SENT (শুরু থেকে মোট পাঠানো):", 14, 42);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(0, 0, 0);
+      doc.text(`Total BDT: BDT ${Math.round(allTimeSellBdt).toLocaleString()}`, 14, 47);
+      doc.text(`Total EUR: EUR ${allTimeSellEur.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 110, 47);
+
+      // 2. Filtered/Current Report totals
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(16, 185, 129); // Green
+      doc.text("CURRENT REPORT REMITTANCE TOTAL (এই রিপোর্টের মোট পাঠানো):", 14, 55);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(0, 0, 0);
+      doc.text(`Report BDT: BDT ${Math.round(filteredSellBdt).toLocaleString()}`, 14, 60);
+      doc.text(`Report EUR: EUR ${filteredSellEur.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 110, 60);
 
       const tableData = summary.transactions.map(tx => [
         new Date(tx.date).toLocaleDateString('en-GB'),
@@ -479,7 +517,7 @@ const App: React.FC = () => {
       autoTable(doc, {
         head: [['Date', 'Type', 'EUR', 'Rate', 'BDT', 'Phone']],
         body: tableData,
-        startY: 45,
+        startY: 68,
         theme: 'striped',
         headStyles: { fillColor: [37, 99, 235] }, // Blue color
         styles: { fontSize: 8 },
