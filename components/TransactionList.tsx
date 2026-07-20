@@ -72,15 +72,18 @@ const TransactionList: React.FC<TransactionListProps> = ({
                 </td>
                 <td className="py-4 px-2">
                   {tx.type === TransactionType.BUY ? (
-                    <span className="text-[10px] text-gray-200">—</span>
+                    tx.cashOutFee > 0 ? (
+                      <span className={`text-xs font-black text-red-500 ${profitBlur}`}>
+                        -€{tx.cashOutFee.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-gray-200">—</span>
+                    )
                   ) : (
-                    <div className="flex flex-col" title={tx.usedBuyingRate ? `কেনা রেট ৳${tx.usedBuyingRate.toFixed(2)} অনুযায়ী হিসাব করা হয়েছে` : ''}>
+                    <div className="flex flex-col">
                       <span className={`text-xs font-black ${tx.profitEur >= 0 ? 'text-green-600' : 'text-red-500'} ${profitBlur}`}>
                         {tx.profitEur >= 0 ? '+' : ''}€{tx.profitEur.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
-                      {tx.usedBuyingRate && (
-                        <span className={`text-[8px] text-gray-400 ${profitBlur}`}>@ {tx.usedBuyingRate.toFixed(2)}</span>
-                      )}
                     </div>
                   )}
                 </td>

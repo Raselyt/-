@@ -55,8 +55,7 @@ const MonthlyReport: React.FC<MonthlyReportProps> = ({
       .reduce((sum, tx) => sum + tx.eurAmount, 0);
 
     const profitEur = filtered
-      .filter(tx => tx.type === TransactionType.SELL)
-      .reduce((sum, tx) => sum + tx.profitEur, 0);
+      .reduce((sum, tx) => sum + (tx.profitEur || 0), 0);
 
     const expensesEur = filtered
       .filter(tx => tx.type === TransactionType.EXPENSE)

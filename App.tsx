@@ -239,6 +239,18 @@ const App: React.FC = () => {
           periodTotalBuyBdt += tx.bdtAmount;
           periodTotalBuyEur += tx.eurAmount;
         }
+
+        // Buying costs/fees are always deducted (minus) from the profit
+        pEur = -tx.cashOutFee;
+        pBdt = -tx.cashOutFee * tx.rate;
+
+        totalProfitBdt += pBdt;
+        totalProfitEur += pEur;
+
+        if (isInPeriod) {
+          periodProfitEur += pEur;
+          periodProfitBdt += pBdt;
+        }
       } else if (tx.type === TransactionType.SELL) {
         currentBdt -= tx.bdtAmount; 
         currentEur += tx.eurAmount;
@@ -246,16 +258,9 @@ const App: React.FC = () => {
         allTimeTotalSellBdt += tx.bdtAmount;
         allTimeTotalSellEur += tx.eurAmount;
 
-        // Profit is calculated based on the latest buying rate at the time of sale
-        // Fallback to overall average if no prior buy exists
-        const rateToUse = latestBuyingRate > 0 ? latestBuyingRate : overallAvgBuyingRate;
-        usedRate = rateToUse;
-
-        if (rateToUse > 0) {
-          const costOfBdtInEur = tx.bdtAmount / rateToUse;
-          pEur = tx.eurAmount - costOfBdtInEur;
-          pBdt = pEur * rateToUse;
-        }
+        // Selling profit is strictly the fee taken from the customer (cashOutFee)
+        pEur = tx.cashOutFee;
+        pBdt = tx.cashOutFee * tx.rate;
 
         totalProfitBdt += pBdt;
         totalProfitEur += pEur;
