@@ -15,7 +15,7 @@ import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import Receipt from './components/Receipt.tsx';
-import { Download, FileText, BarChart3, Users, Bell, Eye, EyeOff } from 'lucide-react';
+import { Download, FileText, BarChart3, Users, Bell, Eye, EyeOff, Calendar, Filter, X } from 'lucide-react';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -86,6 +86,50 @@ const App: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'ALL' | TransactionType>('ALL');
   const [showNoPhoneOnly, setShowNoPhoneOnly] = useState(false);
+
+  // Transaction list date filter state
+  const [txDateMode, setTxDateMode] = useState<'all' | 'single' | 'range'>('all');
+  const [txSingleDate, setTxSingleDate] = useState<string>('');
+  const [txStartDate, setTxStartDate] = useState<string>('');
+  const [txEndDate, setTxEndDate] = useState<string>('');
+
+  const getTodayStr = () => new Date().toISOString().split('T')[0];
+
+  const setTxTodayPreset = () => {
+    const today = getTodayStr();
+    setTxDateMode('single');
+    setTxSingleDate(today);
+  };
+
+  const setTxRangePreset = (startDay: number, endDay: number) => {
+    const baseDateStr = txStartDate || txSingleDate || getTodayStr();
+    const baseDate = new Date(baseDateStr);
+    const year = baseDate.getFullYear();
+    const month = baseDate.getMonth();
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    const actualEndDay = Math.min(endDay, lastDay);
+
+    const formattedMonth = String(month + 1).padStart(2, '0');
+    const sDate = `${year}-${formattedMonth}-${String(startDay).padStart(2, '0')}`;
+    const eDate = `${year}-${formattedMonth}-${String(actualEndDay).padStart(2, '0')}`;
+
+    setTxDateMode('range');
+    setTxStartDate(sDate);
+    setTxEndDate(eDate);
+  };
+
+  const setTxThisMonthPreset = () => {
+    const baseDateStr = txStartDate || txSingleDate || getTodayStr();
+    const baseDate = new Date(baseDateStr);
+    const year = baseDate.getFullYear();
+    const month = baseDate.getMonth();
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    const formattedMonth = String(month + 1).padStart(2, '0');
+
+    setTxDateMode('range');
+    setTxStartDate(`${year}-${formattedMonth}-01`);
+    setTxEndDate(`${year}-${formattedMonth}-${String(lastDay).padStart(2, '0')}`);
+  };
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -278,12 +322,33 @@ const App: React.FC = () => {
       return { ...tx, profitEur: pEur, profitBdt: pBdt, usedBuyingRate: usedRate };
     }).reverse();
 
+    // Helper to get local YYYY-MM-DD string
+    const getLocalDateStr = (dateInput: string | Date) => {
+      const d = new Date(dateInput);
+      if (isNaN(d.getTime())) return '';
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
     // Apply search and filter
     const filteredTransactions = processedTransactions.filter(tx => {
       // Filter for missing phone numbers (only for SELL transactions)
       if (showNoPhoneOnly) {
         if (tx.type !== TransactionType.SELL) return false;
         if (tx.customerPhoneNumber && tx.customerPhoneNumber.trim().length > 0) return false;
+      }
+
+      // Filter by Date
+      const txDateStr = getLocalDateStr(tx.date);
+      if (txDateMode === 'single' && txSingleDate) {
+        if (txDateStr !== txSingleDate) return false;
+      } else if (txDateMode === 'range' && (txStartDate || txEndDate)) {
+        const minD = txStartDate && txEndDate ? (txStartDate <= txEndDate ? txStartDate : txEndDate) : (txStartDate || txEndDate);
+        const maxD = txStartDate && txEndDate ? (txStartDate <= txEndDate ? txEndDate : txStartDate) : (txStartDate || txEndDate);
+        if (minD && txDateStr < minD) return false;
+        if (maxD && txDateStr > maxD) return false;
       }
 
       const query = searchQuery.trim().toLowerCase();
@@ -332,7 +397,7 @@ const App: React.FC = () => {
         allTimeTotalSellEur
       }
     };
-  }, [transactions, openingBdt, openingEur, profitTimeRange, searchQuery, filterType, showNoPhoneOnly]);
+  }, [transactions, openingBdt, openingEur, profitTimeRange, searchQuery, filterType, showNoPhoneOnly, txDateMode, txSingleDate, txStartDate, txEndDate]);
 
   const handleUpdateOpeningBalances = async () => {
     if (!currentUser) return;
@@ -743,7 +808,29 @@ const App: React.FC = () => {
                     <span className="w-2 h-2 rounded-full bg-blue-500"></span>
                     লেনদেন সমূহ
                   </h2>
-                  <span className="bg-blue-50 text-blue-600 text-[10px] font-black px-4 py-1.5 rounded-full uppercase tracking-tighter shadow-inner">{summary.transactions.length} টি রেকর্ড</span>
+                  <div className="flex items-center gap-2">
+                    {(txDateMode !== 'all' || searchQuery || filterType !== 'ALL' || showNoPhoneOnly) && (
+                      <button
+                        onClick={() => {
+                          setTxDateMode('all');
+                          setTxSingleDate('');
+                          setTxStartDate('');
+                          setTxEndDate('');
+                          setSearchQuery('');
+                          setFilterType('ALL');
+                          setShowNoPhoneOnly(false);
+                        }}
+                        className="text-[10px] font-bold text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-xl transition flex items-center gap-1"
+                        title="সকল ফিল্টার রিসেট করুন"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                        ফিল্টার সরান
+                      </button>
+                    )}
+                    <span className="bg-blue-50 text-blue-600 text-[10px] font-black px-4 py-1.5 rounded-full uppercase tracking-tighter shadow-inner">
+                      {summary.transactions.length} টি রেকর্ড
+                    </span>
+                  </div>
                 </div>
                 
                 <div className="flex flex-col md:flex-row gap-3">
@@ -785,6 +872,124 @@ const App: React.FC = () => {
                     </button>
                   </div>
                 </div>
+
+                {/* Date Filter Bar */}
+                <div className="bg-gray-50/90 p-3 rounded-2xl border border-gray-100 space-y-2.5">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-extrabold text-gray-500 uppercase tracking-wider flex items-center gap-1">
+                        <Calendar className="w-3.5 h-3.5 text-blue-500" />
+                        তারিখ ফিল্টার:
+                      </span>
+                      <div className="flex bg-white p-0.5 rounded-xl border border-gray-200 shadow-2xs">
+                        <button
+                          onClick={() => setTxDateMode('all')}
+                          className={`px-3 py-1 rounded-lg text-[10px] font-black transition-all ${
+                            txDateMode === 'all' ? 'bg-blue-600 text-white shadow-xs' : 'text-gray-500 hover:text-gray-800'
+                          }`}
+                        >
+                          সব সময়
+                        </button>
+                        <button
+                          onClick={() => {
+                            setTxDateMode('single');
+                            if (!txSingleDate) setTxSingleDate(getTodayStr());
+                          }}
+                          className={`px-3 py-1 rounded-lg text-[10px] font-black transition-all ${
+                            txDateMode === 'single' ? 'bg-blue-600 text-white shadow-xs' : 'text-gray-500 hover:text-gray-800'
+                          }`}
+                        >
+                          এক দিন
+                        </button>
+                        <button
+                          onClick={() => {
+                            setTxDateMode('range');
+                            if (!txStartDate) setTxStartDate(getTodayStr());
+                            if (!txEndDate) setTxEndDate(getTodayStr());
+                          }}
+                          className={`px-3 py-1 rounded-lg text-[10px] font-black transition-all ${
+                            txDateMode === 'range' ? 'bg-blue-600 text-white shadow-xs' : 'text-gray-500 hover:text-gray-800'
+                          }`}
+                        >
+                          তারিখ সীমা (Range)
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Date Inputs */}
+                    {txDateMode === 'single' && (
+                      <div className="flex items-center gap-2 bg-white px-3 py-1 rounded-xl border border-gray-200">
+                        <span className="text-[10px] font-bold text-gray-500">তারিখ:</span>
+                        <input
+                          type="date"
+                          value={txSingleDate}
+                          onChange={(e) => setTxSingleDate(e.target.value)}
+                          className="text-xs font-bold text-blue-700 border-none outline-none cursor-pointer bg-transparent"
+                        />
+                      </div>
+                    )}
+
+                    {txDateMode === 'range' && (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-xl border border-gray-200">
+                          <span className="text-[10px] font-bold text-gray-500">হতে:</span>
+                          <input
+                            type="date"
+                            value={txStartDate}
+                            onChange={(e) => setTxStartDate(e.target.value)}
+                            className="text-xs font-bold text-gray-800 border-none outline-none cursor-pointer bg-transparent"
+                          />
+                        </div>
+                        <div className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-xl border border-gray-200">
+                          <span className="text-[10px] font-bold text-gray-500">পর্যন্ত:</span>
+                          <input
+                            type="date"
+                            value={txEndDate}
+                            onChange={(e) => setTxEndDate(e.target.value)}
+                            className="text-xs font-bold text-gray-800 border-none outline-none cursor-pointer bg-transparent"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Quick Presets for Date Filter */}
+                  {txDateMode !== 'all' && (
+                    <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-gray-200/60">
+                      <span className="text-[9px] font-extrabold text-gray-400 uppercase tracking-wider mr-1">দ্রুত পছন্দ:</span>
+                      <button
+                        onClick={setTxTodayPreset}
+                        className="px-2.5 py-1 bg-white hover:bg-blue-50 text-blue-700 text-[10px] font-bold rounded-lg border border-gray-200 transition shadow-2xs"
+                      >
+                        আজ
+                      </button>
+                      <button
+                        onClick={() => setTxRangePreset(1, 10)}
+                        className="px-2.5 py-1 bg-white hover:bg-blue-50 text-blue-700 text-[10px] font-bold rounded-lg border border-gray-200 transition shadow-2xs"
+                      >
+                        ১-১০ তারিখ
+                      </button>
+                      <button
+                        onClick={() => setTxRangePreset(11, 20)}
+                        className="px-2.5 py-1 bg-white hover:bg-blue-50 text-blue-700 text-[10px] font-bold rounded-lg border border-gray-200 transition shadow-2xs"
+                      >
+                        ১১-২০ তারিখ
+                      </button>
+                      <button
+                        onClick={() => setTxRangePreset(21, 31)}
+                        className="px-2.5 py-1 bg-white hover:bg-blue-50 text-blue-700 text-[10px] font-bold rounded-lg border border-gray-200 transition shadow-2xs"
+                      >
+                        ২১-৩১ তারিখ
+                      </button>
+                      <button
+                        onClick={setTxThisMonthPreset}
+                        className="px-2.5 py-1 bg-white hover:bg-blue-50 text-blue-700 text-[10px] font-bold rounded-lg border border-gray-200 transition shadow-2xs"
+                      >
+                        পুরো মাস
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
               <TransactionList 
                 transactions={summary.transactions} 
@@ -807,6 +1012,7 @@ const App: React.FC = () => {
               onDateChange={setSelectedReportDate} 
               isBdtPrivate={isBdtPrivate}
               isEurPrivate={isEurPrivate}
+              isProfitPrivate={isProfitPrivate}
             />
             <MonthlyReport 
               transactions={summary.transactions} 
