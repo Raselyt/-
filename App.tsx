@@ -161,15 +161,34 @@ const App: React.FC = () => {
     setIsLoading(true);
     
     try {
-      const { data: txs, error: txError } = await supabase
-        .from('transactions')
-        .select('*')
-        .eq('user_id', currentUser.id)
-        .order('date', { ascending: false });
+      let allRawTxs: any[] = [];
+      let page = 0;
+      const pageSize = 1000;
+      let hasMore = true;
 
-      if (txError) throw txError;
+      while (hasMore) {
+        const { data: chunk, error: chunkError } = await supabase
+          .from('transactions')
+          .select('*')
+          .eq('user_id', currentUser.id)
+          .order('date', { ascending: false })
+          .range(page * pageSize, (page + 1) * pageSize - 1);
+
+        if (chunkError) throw chunkError;
+
+        if (chunk && chunk.length > 0) {
+          allRawTxs = allRawTxs.concat(chunk);
+          if (chunk.length < pageSize) {
+            hasMore = false;
+          } else {
+            page++;
+          }
+        } else {
+          hasMore = false;
+        }
+      }
       
-      const mappedTxs = (txs || []).map(t => ({
+      const mappedTxs = allRawTxs.map(t => ({
         id: t.id,
         userId: t.user_id,
         date: t.date,
@@ -186,26 +205,33 @@ const App: React.FC = () => {
       
       setTransactions(mappedTxs);
 
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('opening_bdt, opening_eur, is_profit_private, is_bdt_private, is_eur_private')
-        .eq('id', currentUser.id)
-        .single();
+      try {
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', currentUser.id)
+          .maybeSingle();
 
-      if (profileError && profileError.code !== 'PGRST116') {
-         throw profileError;
-      }
-      
-      if (profile) {
-        setOpeningBdt(Number(profile.opening_bdt));
-        setOpeningEur(Number(profile.opening_eur));
-        setTempOpeningBdt(profile.opening_bdt.toString());
-        setTempOpeningEur(profile.opening_eur.toString());
-        
-        // Load privacy settings (DB as source of truth if available)
-        if (profile.is_profit_private !== undefined) setIsProfitPrivate(!!profile.is_profit_private);
-        if (profile.is_bdt_private !== undefined) setIsBdtPrivate(!!profile.is_bdt_private);
-        if (profile.is_eur_private !== undefined) setIsEurPrivate(!!profile.is_eur_private);
+        if (profileError) {
+          console.warn('Profile fetch note:', profileError.message);
+        } else if (profile) {
+          setOpeningBdt(Number(profile.opening_bdt || 0));
+          setOpeningEur(Number(profile.opening_eur || 0));
+          setTempOpeningBdt((profile.opening_bdt ?? 0).toString());
+          setTempOpeningEur((profile.opening_eur ?? 0).toString());
+          
+          if (profile.is_profit_private !== undefined && profile.is_profit_private !== null) {
+            setIsProfitPrivate(!!profile.is_profit_private);
+          }
+          if (profile.is_bdt_private !== undefined && profile.is_bdt_private !== null) {
+            setIsBdtPrivate(!!profile.is_bdt_private);
+          }
+          if (profile.is_eur_private !== undefined && profile.is_eur_private !== null) {
+            setIsEurPrivate(!!profile.is_eur_private);
+          }
+        }
+      } catch (pErr) {
+        console.warn('Profile fetch warning:', pErr);
       }
     } catch (error) {
       console.error('Error fetching user data:', error);
@@ -449,8 +475,11 @@ const App: React.FC = () => {
     }
   };
 
-  const addTransaction = async (newTx: Omit<Transaction, 'id' | 'userId' | 'date' | 'profitEur' | 'profitBdt'>) => {
-    if (!currentUser) return;
+  const [isSavingTx, setIsSavingTx] = useState(false);
+
+  const addTransaction = async (newTx: Omit<Transaction, 'id' | 'userId' | 'date' | 'profitEur' | 'profitBdt'>): Promise<boolean> => {
+    if (!currentUser || isSavingTx) return false;
+    setIsSavingTx(true);
     const txToSave = {
       user_id: currentUser.id,
       date: Date.now(),
@@ -466,7 +495,7 @@ const App: React.FC = () => {
     try {
       const { data, error } = await supabase.from('transactions').insert([txToSave]).select();
       if (error) throw error;
-      if (data) {
+      if (data && data.length > 0) {
         const savedTx: Transaction = {
           id: data[0].id,
           userId: data[0].user_id,
@@ -490,9 +519,14 @@ const App: React.FC = () => {
             sendToWhatsApp(savedTx);
           }, 400);
         }
+        return true;
       }
+      return false;
     } catch (error: any) { 
       alert('লেনদেন সেভ করতে সমস্যা হয়েছে: ' + error.message); 
+      return false;
+    } finally {
+      setIsSavingTx(false);
     }
   };
 

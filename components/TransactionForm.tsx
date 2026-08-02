@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { TransactionType, Transaction } from '../types.ts';
 
 interface TransactionFormProps {
-  onSubmit: (tx: Omit<Transaction, 'id' | 'date' | 'profitEur' | 'profitBdt'>) => void;
+  onSubmit: (tx: Omit<Transaction, 'id' | 'date' | 'profitEur' | 'profitBdt'>) => Promise<boolean | void> | void;
   avgBuyingRate: number;
   transactions: Transaction[];
 }
@@ -11,6 +11,7 @@ interface TransactionFormProps {
 const TransactionForm: React.FC<TransactionFormProps> = ({ onSubmit, avgBuyingRate, transactions }) => {
   const [type, setType] = useState<TransactionType>(TransactionType.BUY);
   const [inputMode, setInputMode] = useState<'EUR' | 'BDT'>('EUR');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Get unique customers from recent transactions
   const allUniqueCustomers = Array.from(new Set(
@@ -143,8 +144,10 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onSubmit, avgBuyingRa
     }
   }, [cashOutFee]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
+
     const finalEur = type === TransactionType.EXPENSE ? (parseFloat(eurInput) || 0) : calculatedTotalEur;
     const finalRate = type === TransactionType.EXPENSE ? 1 : parseFloat(rate);
     
@@ -156,25 +159,32 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onSubmit, avgBuyingRa
     if (type !== TransactionType.EXPENSE && (!finalEur || !finalRate)) return;
     if (type === TransactionType.EXPENSE && !eurInput && !bdtInput) return;
 
-    onSubmit({
-      type,
-      eurAmount: finalEur,
-      rate: finalRate,
-      bdtAmount: calculatedBdt,
-      cashOutFee: type === TransactionType.SELL ? (parseFloat(cashOutFee) || 0) : (parseFloat(transferFee) || 0),
-      note: note || (type === TransactionType.BUY ? 
-        (inputMode === 'BDT' ? `ইনভেস্ট (২.৫% কর্তন শেষে)` : `ইনভেস্ট (+২.৫% বোনাস)`) : 
-        (type === TransactionType.EXPENSE ? 'ব্যবসায়িক খরচ' : `রেমিটেন্স: ৳${Math.round(calculatedBdt)}`)),
-      customerPhoneNumber: type === TransactionType.SELL ? phoneNumber : undefined
-    });
+    setIsSubmitting(true);
+    try {
+      const res = await onSubmit({
+        type,
+        eurAmount: finalEur,
+        rate: finalRate,
+        bdtAmount: calculatedBdt,
+        cashOutFee: type === TransactionType.SELL ? (parseFloat(cashOutFee) || 0) : (parseFloat(transferFee) || 0),
+        note: note || (type === TransactionType.BUY ? 
+          (inputMode === 'BDT' ? `ইনভেস্ট (২.৫% কর্তন শেষে)` : `ইনভেস্ট (+২.৫% বোনাস)`) : 
+          (type === TransactionType.EXPENSE ? 'ব্যবসায়িক খরচ' : `রেমিটেন্স: ৳${Math.round(calculatedBdt)}`)),
+        customerPhoneNumber: type === TransactionType.SELL ? phoneNumber : undefined
+      });
 
-    setEurInput('');
-    setBdtInput('');
-    setRate('');
-    setCashOutFee('');
-    setTransferFee('');
-    setNote('');
-    setPhoneNumber('');
+      if (res !== false) {
+        setEurInput('');
+        setBdtInput('');
+        setRate('');
+        setCashOutFee('');
+        setTransferFee('');
+        setNote('');
+        setPhoneNumber('');
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -359,8 +369,24 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onSubmit, avgBuyingRa
           </div>
         )}
 
-        <button type="submit" className={`w-full py-5 rounded-2xl text-white font-black uppercase tracking-widest transition-all shadow-xl active:scale-95 flex items-center justify-center gap-2 ${type === TransactionType.BUY ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'}`}>
-          {type === TransactionType.BUY ? 'ইনভেস্টমেন্ট সেভ করুন' : 'এন্ট্রি সেভ করুন'}
+        <button 
+          type="submit" 
+          disabled={isSubmitting}
+          className={`w-full py-5 rounded-2xl text-white font-black uppercase tracking-widest transition-all shadow-xl active:scale-95 flex items-center justify-center gap-2 ${
+            isSubmitting ? 'bg-gray-400 cursor-not-allowed opacity-75' : (type === TransactionType.BUY ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700')
+          }`}
+        >
+          {isSubmitting ? (
+            <span className="flex items-center gap-2">
+              <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              সেভ হচ্ছে...
+            </span>
+          ) : (
+            type === TransactionType.BUY ? 'ইনভেস্টমেন্ট সেভ করুন' : 'এন্ট্রি সেভ করুন'
+          )}
         </button>
       </form>
     </div>
